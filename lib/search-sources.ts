@@ -34,6 +34,38 @@ const buscarUsuarios: SearchSource = async (supabase, like) => {
   }))
 }
 
+// ─── Clientes (RLS: authenticated lee; admin escribe) ───────────────────────
+const buscarClientes: SearchSource = async (supabase, like) => {
+  const { data } = await supabase
+    .from("clientes")
+    .select("id, id_publico, tipo, nombre, apellido, razon_social, documento, telefono, activo")
+    .or(
+      [
+        `id_publico.ilike.${like}`,
+        `nombre.ilike.${like}`,
+        `apellido.ilike.${like}`,
+        `razon_social.ilike.${like}`,
+        `documento.ilike.${like}`,
+        `telefono.ilike.${like}`,
+        `instagram.ilike.${like}`,
+      ].join(","),
+    )
+    .order("created_at", { ascending: false })
+    .limit(5)
+  return (data ?? []).map((c) => {
+    const label = c.tipo === "MAYORISTA"
+      ? (c.razon_social ?? c.nombre)
+      : [c.nombre, c.apellido].filter(Boolean).join(" ")
+    const tipoLabel = c.tipo === "MAYORISTA" ? "Mayorista" : "Minorista"
+    return {
+      href: `${DOMINIO.clientes.ruta}/${c.id}`,
+      label: `${c.id_publico} · ${label}`,
+      sub: `${DOMINIO.clientes.singular} · ${tipoLabel}${c.telefono ? ` · ${c.telefono}` : ""}${c.activo ? "" : " · inactivo"}`,
+      iconKey: "Users" as const,
+    }
+  })
+}
+
 // ─── Proveedores (RLS: authenticated lee; admin escribe) ────────────────────
 const buscarProveedores: SearchSource = async (supabase, like) => {
   const { data } = await supabase
@@ -60,6 +92,7 @@ const buscarProveedores: SearchSource = async (supabase, like) => {
 // Los módulos cosechados agregan su fuente acá (clientes, ventas, ...).
 const SOURCES: SearchSource[] = [
   buscarUsuarios,
+  buscarClientes,
   buscarProveedores,
 ]
 
