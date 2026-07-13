@@ -38,6 +38,7 @@ export const ENTIDAD_TIPO_LABEL: Record<string, string> = {
   configuracion: DOMINIO.configuracion.singular,
   proveedor:     DOMINIO.proveedores.singular,
   cliente:       DOMINIO.clientes.singular,
+  producto:      DOMINIO.productos.singular,
 }
 
 // Link a la entidad desde el historial. Los módulos cosechados registran su
@@ -46,6 +47,7 @@ export const ENTIDAD_TIPO_RUTA: Record<string, string> = {
   usuario:   DOMINIO.usuarios.ruta,
   proveedor: DOMINIO.proveedores.ruta,
   cliente:   DOMINIO.clientes.ruta,
+  producto:  DOMINIO.productos.ruta,
 }
 
 export function linkEntidad(tipo: string | null, id: string | null): string | null {

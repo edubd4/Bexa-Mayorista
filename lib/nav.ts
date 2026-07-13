@@ -51,6 +51,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: DOMINIO.clientes.plural,    href: DOMINIO.clientes.ruta,    iconKey: "Users"    },
       { label: DOMINIO.proveedores.plural, href: DOMINIO.proveedores.ruta, iconKey: "Landmark" },
+      { label: DOMINIO.productos.plural,   href: DOMINIO.productos.ruta,   iconKey: "Package"  },
     ],
   },
   {
