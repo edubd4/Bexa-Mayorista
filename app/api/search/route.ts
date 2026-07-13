@@ -1,0 +1,29 @@
+import { NextResponse } from "next/server"
+import { createServerClient } from "@/lib/supabase/server"
+import { buscarGlobal } from "@/lib/search-sources"
+
+// GET /api/search?q=texto
+// Busca en las fuentes registradas en lib/search-sources.ts (hasta 5 por tipo).
+// RLS filtra: cada rol ve solo lo que sus policies permiten.
+export async function GET(req: Request) {
+  const supabase = await createServerClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 })
+  }
+
+  const url = new URL(req.url)
+  // Comas y paréntesis son sintaxis del filtro .or() de PostgREST: si viajan
+  // dentro del término rompen la query. Los reemplazamos por espacio.
+  const q = (url.searchParams.get("q") ?? "").replace(/[,()]/g, " ").trim()
+  if (q.length < 2) {
+    return NextResponse.json({ ok: true, data: { resultados: [] } })
+  }
+
+  const resultados = await buscarGlobal(supabase, q)
+
+  return NextResponse.json({ ok: true, data: { resultados } })
+}
