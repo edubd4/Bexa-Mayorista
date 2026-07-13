@@ -55,6 +55,12 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    label: "Comercial",
+    items: [
+      { label: "Listas de precios", href: "/listas-precios", iconKey: "BookOpen", roles: [ROL.ADMIN] },
+    ],
+  },
+  {
     label: "Sistema",
     items: [
       { label: DOMINIO.usuarios.plural,      href: DOMINIO.usuarios.ruta,      iconKey: "UserCog",    roles: [ROL.ADMIN] },

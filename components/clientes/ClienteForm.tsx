@@ -13,10 +13,13 @@ import { createCliente, updateCliente } from "@/app/(dashboard)/clientes/actions
 import { DOMINIO } from "@/lib/dominio"
 import { TIPO_CLIENTE, type ClienteInput } from "@/lib/validators/cliente"
 
+type ListaPrecio = { id: string; id_publico: string; nombre: string }
+
 type Props = {
   mode: "create" | "edit"
   clienteId?: string
   initial?: Partial<ClienteInput>
+  listasPrecios?: ListaPrecio[]
 }
 
 const DEFAULTS: ClienteInput = {
@@ -36,7 +39,7 @@ const DEFAULTS: ClienteInput = {
   notas: undefined,
 }
 
-export function ClienteForm({ mode, clienteId, initial }: Props) {
+export function ClienteForm({ mode, clienteId, initial, listasPrecios = [] }: Props) {
   const router = useRouter()
   const toast = useToast()
   const [form, setForm] = useState<ClienteInput>({ ...DEFAULTS, ...initial })
@@ -223,7 +226,24 @@ export function ClienteForm({ mode, clienteId, initial }: Props) {
         />
       </section>
 
-      {/* NOTA: el selector de lista_precio_id aparece cuando la Ola A cierre con listas-precios (0006). */}
+      {listasPrecios.length > 0 && (
+        <section className="rounded-xl border border-app-line-soft bg-app-card p-6 space-y-3">
+          <h2 className="font-display text-lg font-semibold">Lista de precios</h2>
+          <p className="text-xs text-app-muted">
+            La lista que usa este cliente para calcular precios en cada venta. Si queda vacío, usa el precio base del producto.
+          </p>
+          <Select
+            id="lista_precio_id"
+            value={form.lista_precio_id ?? ""}
+            onChange={(e) => update("lista_precio_id", e.target.value || undefined)}
+          >
+            <option value="">— Sin lista (precio base) —</option>
+            {listasPrecios.map((l) => (
+              <option key={l.id} value={l.id}>{l.id_publico} · {l.nombre}</option>
+            ))}
+          </Select>
+        </section>
+      )}
 
       {error && (
         <div
