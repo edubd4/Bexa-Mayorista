@@ -47,6 +47,12 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    label: "Maestros",
+    items: [
+      { label: DOMINIO.proveedores.plural, href: DOMINIO.proveedores.ruta, iconKey: "Landmark" },
+    ],
+  },
+  {
     label: "Sistema",
     items: [
       { label: DOMINIO.usuarios.plural,      href: DOMINIO.usuarios.ruta,      iconKey: "UserCog",    roles: [ROL.ADMIN] },

@@ -34,9 +34,33 @@ const buscarUsuarios: SearchSource = async (supabase, like) => {
   }))
 }
 
+// ─── Proveedores (RLS: authenticated lee; admin escribe) ────────────────────
+const buscarProveedores: SearchSource = async (supabase, like) => {
+  const { data } = await supabase
+    .from("proveedores")
+    .select("id, id_publico, nombre, cuit, telefono, activo")
+    .or(
+      [
+        `id_publico.ilike.${like}`,
+        `nombre.ilike.${like}`,
+        `cuit.ilike.${like}`,
+        `telefono.ilike.${like}`,
+      ].join(","),
+    )
+    .order("created_at", { ascending: false })
+    .limit(5)
+  return (data ?? []).map((p) => ({
+    href: `${DOMINIO.proveedores.ruta}/${p.id}`,
+    label: `${p.id_publico} · ${p.nombre}`,
+    sub: `${DOMINIO.proveedores.singular}${p.telefono ? ` · ${p.telefono}` : ""}${p.activo ? "" : " · inactivo"}`,
+    iconKey: "Landmark" as const,
+  }))
+}
+
 // Los módulos cosechados agregan su fuente acá (clientes, ventas, ...).
 const SOURCES: SearchSource[] = [
   buscarUsuarios,
+  buscarProveedores,
 ]
 
 export async function buscarGlobal(supabase: Supabase, q: string): Promise<SearchResult[]> {

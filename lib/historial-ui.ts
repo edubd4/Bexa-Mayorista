@@ -36,12 +36,14 @@ export const TIPO_EVENTO_VARIANT: Record<string, "accent" | "amber" | "green" | 
 export const ENTIDAD_TIPO_LABEL: Record<string, string> = {
   usuario:       DOMINIO.usuarios.singular,
   configuracion: DOMINIO.configuracion.singular,
+  proveedor:     DOMINIO.proveedores.singular,
 }
 
 // Link a la entidad desde el historial. Los módulos cosechados registran su
 // ruta acá (patrón: `${DOMINIO.<entidad>.ruta}?q=<id_publico>`).
 export const ENTIDAD_TIPO_RUTA: Record<string, string> = {
-  usuario: DOMINIO.usuarios.ruta,
+  usuario:   DOMINIO.usuarios.ruta,
+  proveedor: DOMINIO.proveedores.ruta,
 }
 
 export function linkEntidad(tipo: string | null, id: string | null): string | null {
