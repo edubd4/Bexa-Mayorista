@@ -60,6 +60,12 @@ export default async function ClienteDetallePage({ params }: { params: Params })
 
   if (!cliente) notFound()
 
+  const { data: listasPrecios } = await supabase
+    .from("listas_precios")
+    .select("id, id_publico, nombre")
+    .eq("activo", true)
+    .order("nombre")
+
   const esConsumidorFinal = cliente.id === CONSUMIDOR_FINAL_ID
   const ent = DOMINIO.clientes
   const ubicacion = [cliente.direccion, cliente.ciudad, cliente.provincia]
@@ -158,6 +164,7 @@ export default async function ClienteDetallePage({ params }: { params: Params })
           <ClienteForm
             mode="edit"
             clienteId={cliente.id}
+            listasPrecios={(listasPrecios ?? []) as { id: string; id_publico: string; nombre: string }[]}
             initial={{
               tipo: cliente.tipo,
               nombre: cliente.nombre,

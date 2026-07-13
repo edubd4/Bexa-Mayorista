@@ -66,6 +66,29 @@ const buscarClientes: SearchSource = async (supabase, like) => {
   })
 }
 
+// ─── Productos (usa vista SIN costos — no filtramos por rol, la vista es segura) ─
+const buscarProductos: SearchSource = async (supabase, like) => {
+  const { data } = await supabase
+    .from("productos_catalogo")
+    .select("id, id_publico, sku, nombre, marca, activo")
+    .or(
+      [
+        `id_publico.ilike.${like}`,
+        `sku.ilike.${like}`,
+        `nombre.ilike.${like}`,
+        `marca.ilike.${like}`,
+      ].join(","),
+    )
+    .order("created_at", { ascending: false })
+    .limit(5)
+  return (data ?? []).map((p) => ({
+    href: `${DOMINIO.productos.ruta}/${p.id}`,
+    label: `${p.id_publico} · ${p.nombre}`,
+    sub: `${DOMINIO.productos.singular}${p.sku ? ` · SKU ${p.sku}` : ""}${p.marca ? ` · ${p.marca}` : ""}${p.activo ? "" : " · inactivo"}`,
+    iconKey: "Package" as const,
+  }))
+}
+
 // ─── Proveedores (RLS: authenticated lee; admin escribe) ────────────────────
 const buscarProveedores: SearchSource = async (supabase, like) => {
   const { data } = await supabase
@@ -94,6 +117,7 @@ const SOURCES: SearchSource[] = [
   buscarUsuarios,
   buscarClientes,
   buscarProveedores,
+  buscarProductos,
 ]
 
 export async function buscarGlobal(supabase: Supabase, q: string): Promise<SearchResult[]> {

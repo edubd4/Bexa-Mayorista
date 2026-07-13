@@ -34,10 +34,13 @@ export const TIPO_EVENTO_VARIANT: Record<string, "accent" | "amber" | "green" | 
 // entidad_tipo (nombre de ESQUEMA: 'usuario', 'cliente', ...) → label visible.
 // Las entidades de dominio salen del diccionario; acá solo mapeos del core.
 export const ENTIDAD_TIPO_LABEL: Record<string, string> = {
-  usuario:       DOMINIO.usuarios.singular,
-  configuracion: DOMINIO.configuracion.singular,
-  proveedor:     DOMINIO.proveedores.singular,
-  cliente:       DOMINIO.clientes.singular,
+  usuario:          DOMINIO.usuarios.singular,
+  configuracion:    DOMINIO.configuracion.singular,
+  proveedor:        DOMINIO.proveedores.singular,
+  cliente:          DOMINIO.clientes.singular,
+  producto:         DOMINIO.productos.singular,
+  lista_precio:     "Lista de precios",
+  regla_descuento:  "Regla de descuento",
 }
 
 // Link a la entidad desde el historial. Los módulos cosechados registran su
@@ -46,6 +49,8 @@ export const ENTIDAD_TIPO_RUTA: Record<string, string> = {
   usuario:   DOMINIO.usuarios.ruta,
   proveedor: DOMINIO.proveedores.ruta,
   cliente:   DOMINIO.clientes.ruta,
+  producto:  DOMINIO.productos.ruta,
+  // lista_precio y regla_descuento se filtran por texto en /historial (no linkeo directo).
 }
 
 export function linkEntidad(tipo: string | null, id: string | null): string | null {

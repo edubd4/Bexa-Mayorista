@@ -2,11 +2,11 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
-import { ClienteForm } from "@/components/clientes/ClienteForm"
+import { ProductoForm } from "@/components/productos/ProductoForm"
 import { ROL } from "@/lib/constants"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
 
-export default async function NuevoClientePage() {
+export default async function NuevoProductoPage() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
@@ -17,16 +17,37 @@ export default async function NuevoClientePage() {
     .eq("id", user.id)
     .single()
   if (profile?.rol !== ROL.ADMIN || !profile.activo) {
-    redirect(DOMINIO.clientes.ruta)
+    redirect(DOMINIO.productos.ruta)
   }
 
-  const { data: listasPrecios } = await supabase
-    .from("listas_precios")
-    .select("id, id_publico, nombre")
-    .eq("activo", true)
-    .order("nombre")
+  const [{ data: proveedores }, { data: catRows }, { data: marcaRows }] = await Promise.all([
+    supabase
+      .from("proveedores")
+      .select("id, id_publico, nombre")
+      .eq("activo", true)
+      .order("nombre"),
+    supabase
+      .from("productos_catalogo")
+      .select("categoria")
+      .not("categoria", "is", null),
+    supabase
+      .from("productos_catalogo")
+      .select("marca")
+      .not("marca", "is", null),
+  ])
 
-  const ent = DOMINIO.clientes
+  const categoriasExistentes = Array.from(
+    new Set(((catRows ?? []) as { categoria: string | null }[])
+      .map((r) => r.categoria)
+      .filter((c): c is string => !!c)),
+  ).sort()
+  const marcasExistentes = Array.from(
+    new Set(((marcaRows ?? []) as { marca: string | null }[])
+      .map((r) => r.marca)
+      .filter((m): m is string => !!m)),
+  ).sort()
+
+  const ent = DOMINIO.productos
 
   return (
     <div className="app-circuit min-h-[calc(100vh-4rem)] px-6 md:px-10 py-8">
@@ -47,13 +68,15 @@ export default async function NuevoClientePage() {
             {nuevoLabel(ent)}
           </h1>
           <p className="text-app-secondary mt-1">
-            Elegí el tipo (mayorista o minorista) y cargá los datos que tengas. Solo el nombre es obligatorio.
+            El stock inicial se carga después con un movimiento ENTRADA.
           </p>
         </header>
 
-        <ClienteForm
+        <ProductoForm
           mode="create"
-          listasPrecios={(listasPrecios ?? []) as { id: string; id_publico: string; nombre: string }[]}
+          proveedores={(proveedores ?? []) as { id: string; id_publico: string; nombre: string }[]}
+          categoriasExistentes={categoriasExistentes}
+          marcasExistentes={marcasExistentes}
         />
       </div>
     </div>
