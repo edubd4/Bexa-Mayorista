@@ -1,0 +1,59 @@
+# Blueprint BEXA — validado contra Bexa/PLAN-TECNICO.md (2026-07-13)
+proyecto: bexa
+cliente: "BEXA Import"
+repo: edubd4/Bexa-Mayorista  # PRIVADO (decisión 2026-07-08)
+descripcion: "Distribuidora mayorista/minorista de electros, ferretería y hogar"
+
+# Respuestas del cliente (2026-07-13) — cambian el modelo de datos:
+decisiones_cliente:
+  listas_precios: "Varias, según proveedor. Descuentos por producto (lo común), también por categoría o globales → reglas_descuento con scope producto|categoria|global"
+  comisiones: "% fijo por vendedor + override opcional por producto. Liquidación SEMANAL → vista de liquidación por semana"
+  consumidor_final: "Sí hay venta minorista sin cliente → seed cliente especial 'Consumidor Final'"
+  flujo_venta: "Venta directa Y flujo pedido→preparación→entrega según cantidades → ventas llevan estado_entrega además de estado_cobro"
+  carga_inicial: "Manual directamente en el sistema (no hay registros previos) — sin importador Excel"
+
+roles: [admin, vendedor]     # admin siempre existe
+
+marca:
+  nombre_visible: "BEXA"
+  tema:
+    accent: "#f97316"        # naranja industrial
+    accent_2: "#f59e0b"
+  fonts: { display: "Space Grotesk", sans: "Inter", mono: "JetBrains Mono" }
+
+modulos:
+  - id: clientes
+    dominio: { singular: Cliente, plural: Clientes, prefijoId: CLI }
+    extras: [lista_precio_id, tipo_cliente, instagram, ciudad]
+  - id: proveedores
+  - id: productos
+    dominio: { prefijoId: PROD }
+    extras: [sku, atributos_jsonb, vista_sin_costos]
+  - id: ventas
+    dominio: { singular: Venta, plural: Ventas, prefijoId: VTA }
+    extras: [pricing_engine, comisiones, estado_entrega]
+  - id: compras
+  - id: caja
+  - id: contabilidad
+  - id: panel
+  - id: alertas
+  - id: historial
+
+nuevos:                      # candidatos a cosecha
+  - id: listas-precios
+    descripcion: "Listas por cliente (varias, según proveedor) + reglas_descuento por cantidad con scope producto|categoria|global + RPC resolver_precio"
+  - id: comisiones
+    descripcion: "Comisión por venta (% por vendedor + override por producto), append-only, RLS solo-lo-mío, vista de liquidación semanal"
+
+permisos:
+  vendedor:
+    ventas: solo_propias     # RLS nivel fila
+    productos: sin_costos    # vista SQL nivel columna
+    caja: sin_acceso
+
+integraciones:
+  ia: false                  # se cotiza aparte
+  n8n: false
+
+env:
+  NEXT_PUBLIC_APP_NAME: BEXA

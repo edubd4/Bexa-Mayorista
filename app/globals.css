@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+@layer base {
+  :root {
+    --background: 222 47% 6%;
+    --foreground: 210 20% 95%;
+    --card: 220 35% 9%;
+    --card-foreground: 210 20% 95%;
+    --popover: 220 35% 9%;
+    --popover-foreground: 210 20% 95%;
+    --primary: 25 95% 53%;
+    --primary-foreground: 222 47% 6%;
+    --secondary: 220 30% 14%;
+    --secondary-foreground: 210 20% 95%;
+    --muted: 220 30% 14%;
+    --muted-foreground: 215 16% 62%;
+    --accent: 220 30% 14%;
+    --accent-foreground: 210 20% 95%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 20% 95%;
+    --border: 220 30% 16%;
+    --input: 220 30% 14%;
+    --ring: 25 95% 53%;
+    --radius: 0.625rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', sans-serif;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* ─── Theme Variables ─────────────────────────────────────────────────────────
+   ESTE archivo es LO ÚNICO que se edita para rebrandear un proyecto
+   (regla de oro #2): colores, fonts y gradientes salen de acá.
+   El blueprint define accent/fonts y este archivo se genera en el bootstrap. */
+
+/* Dark theme (default) */
+:root {
+  /* Fonts (referenciadas por tailwind.config — cambiar acá + el @import de arriba) */
+  --app-font-display: 'Space Grotesk';
+  --app-font-sans: 'Inter';
+  --app-font-mono: 'JetBrains Mono';
+
+  /* Gradientes de marca (botones/hero) */
+  --app-grad: linear-gradient(135deg, #f97316, #f59e0b);
+  --app-grad-2: linear-gradient(135deg, #f59e0b, #d97706);
+
+  --app-bg: #0a0f1a;
+  --app-card: #101725;
+  --app-input: #172033;
+  --app-accent: 249 115 22;   /* naranja industrial BEXA */
+  --app-accent-2: 245 158 11; /* ambar */
+  --app-green: 52 211 153;
+  --app-red: 251 113 133;
+  --app-amber: 251 191 36;
+  --app-violet: 167 139 250;
+  --app-text: #eef1f6;
+  --app-text-secondary: #c5ccd8;
+  --app-text-muted: #9aa4b4;
+  --app-surface: #0a0f1a;
+  --app-surface-low: #101725;
+  --app-surface-mid: #172033;
+  --app-surface-high: #1f2a40;
+  --app-surface-highest: #2a3550;
+  --app-steel: #8a93a3;
+  --app-outline: #909096;
+  --app-line: #1f2a40;
+  --app-line-soft: #172033;
+}
+
+/* Light theme (placeholder — se activa por proyecto si el cliente lo pide) */
+[data-theme="light"] {
+  --background: 220 20% 97%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 15%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 15%;
+  --primary: 25 95% 45%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 92%;
+  --secondary-foreground: 222 47% 15%;
+  --muted: 220 14% 92%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 220 14% 92%;
+  --accent-foreground: 222 47% 15%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 13% 87%;
+  --input: 220 13% 91%;
+  --ring: 25 95% 45%;
+
+  --app-bg: #f5f7fa;
+  --app-card: #ffffff;
+  --app-input: #f0f2f5;
+  --app-accent: 234 88 12;
+  --app-accent-2: 180 83 9;
+  --app-green: 22 163 74;
+  --app-red: 220 38 38;
+  --app-amber: 217 119 6;
+  --app-violet: 124 58 237;
+  --app-text: #0a0f1a;
+  --app-text-secondary: #334155;
+  --app-text-muted: #64748b;
+  --app-surface: #f8f9fc;
+  --app-surface-low: #f1f3f7;
+  --app-surface-mid: #e8eaf0;
+  --app-surface-high: #dde1e8;
+  --app-surface-highest: #d0d5de;
+  --app-steel: #475569;
+  --app-outline: #94a3b8;
+  --app-line: #dde1e8;
+  --app-line-soft: #e8eaf0;
+}
+
+/* Sutil grid de circuito como fondo decorativo */
+.app-circuit {
+  background-image: radial-gradient(rgba(249, 115, 22, .06) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
