@@ -112,8 +112,25 @@ const buscarProveedores: SearchSource = async (supabase, like) => {
   }))
 }
 
+// ─── Ventas (RLS: admin ve todas; vendedor solo las suyas) ───────────────────
+const buscarVentas: SearchSource = async (supabase, like) => {
+  const { data } = await supabase
+    .from("v_ventas_lista")
+    .select("id, id_publico, total, estado_cobro, estado_entrega")
+    .ilike("id_publico", like)
+    .order("fecha", { ascending: false })
+    .limit(5)
+  return (data ?? []).map((v) => ({
+    href: `${DOMINIO.ventas.ruta}/${v.id}`,
+    label: `${v.id_publico}`,
+    sub: `${DOMINIO.ventas.singular} · ${v.estado_cobro} · ${v.estado_entrega}`,
+    iconKey: "ClipboardList" as const,
+  }))
+}
+
 // Los módulos cosechados agregan su fuente acá (clientes, ventas, ...).
 const SOURCES: SearchSource[] = [
+  buscarVentas,
   buscarUsuarios,
   buscarClientes,
   buscarProveedores,

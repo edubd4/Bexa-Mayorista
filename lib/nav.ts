@@ -44,6 +44,7 @@ export const NAV: NavGroup[] = [
     label: "Operación",
     items: [
       { label: "Panel", href: "/panel", iconKey: "LayoutDashboard" },
+      { label: DOMINIO.ventas.plural, href: DOMINIO.ventas.ruta, iconKey: "ClipboardList" },
     ],
   },
   {
