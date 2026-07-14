@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { Badge } from "@/components/ui/badge"
 import { CancelarVentaButton } from "@/components/ventas/CancelarVentaButton"
+import { CobrarVentaForm } from "@/components/ventas/CobrarVentaForm"
 import {
   Table,
   TableBody,
@@ -112,6 +113,11 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
   const puedeCancelar =
     venta.estado_cobro !== "CANCELADA" &&
     (esAdmin || (venta.vendedor_id === user.id && Number(venta.total_cobrado) === 0))
+  const puedeCobrar =
+    venta.estado_cobro !== "CANCELADA" &&
+    venta.estado_cobro !== "COBRADA" &&
+    saldo > 0 &&
+    (esAdmin || venta.vendedor_id === user.id)
 
   return (
     <div className="app-circuit min-h-[calc(100vh-4rem)] px-6 md:px-10 py-8">
@@ -152,6 +158,9 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
                 {ESTADO_COBRO_LABEL[venta.estado_cobro]}
               </Badge>
             </div>
+            {puedeCobrar && (
+              <CobrarVentaForm ventaId={venta.id} idPublico={venta.id_publico} saldo={saldo} />
+            )}
             {puedeCancelar && (
               <CancelarVentaButton ventaId={venta.id} idPublico={venta.id_publico} />
             )}
