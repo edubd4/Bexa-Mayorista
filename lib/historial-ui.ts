@@ -42,6 +42,7 @@ export const ENTIDAD_TIPO_LABEL: Record<string, string> = {
   lista_precio:     "Lista de precios",
   regla_descuento:  "Regla de descuento",
   venta:            DOMINIO.ventas.singular,
+  compra:           DOMINIO.compras.singular,
 }
 
 // Link a la entidad desde el historial. Los módulos cosechados registran su
@@ -52,6 +53,7 @@ export const ENTIDAD_TIPO_RUTA: Record<string, string> = {
   cliente:   DOMINIO.clientes.ruta,
   producto:  DOMINIO.productos.ruta,
   venta:     DOMINIO.ventas.ruta,
+  compra:    DOMINIO.compras.ruta,
   // lista_precio y regla_descuento se filtran por texto en /historial (no linkeo directo).
 }
 
