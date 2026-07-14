@@ -22,6 +22,7 @@ export type IconKey =
   | "Settings"
   | "AlertTriangle"
   | "ScrollText"
+  | "UserRoundSearch"
 
 export type NavItem = {
   label: string
@@ -76,6 +77,7 @@ export const NAV: NavGroup[] = [
     label: "Análisis",
     items: [
       { label: "Alertas", href: "/alertas", iconKey: "AlertTriangle", roles: [ROL.ADMIN] },
+      { label: DOMINIO.seguimiento.plural, href: DOMINIO.seguimiento.ruta, iconKey: "UserRoundSearch" },
     ],
   },
   {
