@@ -76,7 +76,10 @@ create table public.movimientos_caja (
   -- FKs opcionales según origen (permiten cruzar caja ↔ ventas / compras / gastos)
   venta_id       uuid references public.ventas(id)   on delete set null,
   compra_id      uuid references public.compras(id)  on delete set null,
-  gasto_id       uuid references public.gastos(id)   on delete set null   deferrable initially deferred,
+  -- gasto_id se agrega abajo con ALTER TABLE (FK diferida: gastos aún no existe).
+  --   Patrón de dependencia circular: gastos → movimientos_caja Y viceversa.
+  --   Mismo truco que clientes.lista_precio_id (0004 ↔ 0006).
+  gasto_id       uuid,
   created_at     timestamptz not null default now(),
   created_by     uuid references auth.users(id)
 );
@@ -158,6 +161,15 @@ create trigger gastos_set_id_publico
 create index idx_gastos_categoria on public.gastos(categoria_id);
 create index idx_gastos_fecha     on public.gastos(fecha desc);
 create index idx_gastos_metodo    on public.gastos(metodo_pago);
+
+-- Cerrar la FK diferida movimientos_caja.gasto_id → gastos.id
+alter table public.movimientos_caja
+  add constraint movimientos_caja_gasto_id_fkey
+  foreign key (gasto_id) references public.gastos(id)
+  on delete set null
+  deferrable initially deferred;
+
+create index idx_movcaja_gasto on public.movimientos_caja(gasto_id) where gasto_id is not null;
 
 -- Gastos también append-only (correcciones = ajuste de caja + nuevo gasto)
 create or replace function public.gastos_block_mutations()
