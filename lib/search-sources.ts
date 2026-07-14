@@ -128,8 +128,25 @@ const buscarVentas: SearchSource = async (supabase, like) => {
   }))
 }
 
+// ─── Compras (RLS: admin-only) ───────────────────────────────────────────────
+const buscarCompras: SearchSource = async (supabase, like) => {
+  const { data } = await supabase
+    .from("compras")
+    .select("id, id_publico, total, estado, numero_factura")
+    .or(`id_publico.ilike.${like},numero_factura.ilike.${like}`)
+    .order("fecha", { ascending: false })
+    .limit(5)
+  return (data ?? []).map((c) => ({
+    href: `${DOMINIO.compras.ruta}/${c.id}`,
+    label: `${c.id_publico}${c.numero_factura ? ` · F ${c.numero_factura}` : ""}`,
+    sub: `${DOMINIO.compras.singular} · ${c.estado}`,
+    iconKey: "Receipt" as const,
+  }))
+}
+
 // Los módulos cosechados agregan su fuente acá (clientes, ventas, ...).
 const SOURCES: SearchSource[] = [
+  buscarCompras,
   buscarVentas,
   buscarUsuarios,
   buscarClientes,
