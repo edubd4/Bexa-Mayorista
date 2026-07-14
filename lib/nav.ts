@@ -63,6 +63,13 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    label: "Plata",
+    items: [
+      { label: DOMINIO.caja.plural,   href: DOMINIO.caja.ruta,   iconKey: "Wallet",  roles: [ROL.ADMIN] },
+      { label: DOMINIO.gastos.plural, href: DOMINIO.gastos.ruta, iconKey: "Receipt", roles: [ROL.ADMIN] },
+    ],
+  },
+  {
     label: "Sistema",
     items: [
       { label: DOMINIO.usuarios.plural,      href: DOMINIO.usuarios.ruta,      iconKey: "UserCog",    roles: [ROL.ADMIN] },

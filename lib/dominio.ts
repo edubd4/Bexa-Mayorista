@@ -110,6 +110,14 @@ export const DOMINIO = {
     icono: "Wallet",
     genero: "m",
   },
+  gastos: {
+    singular: "Gasto",
+    plural: "Gastos",
+    ruta: "/gastos",
+    prefijoId: "GST",
+    icono: "Receipt",
+    genero: "m",
+  },
   contabilidad: {
     singular: "Finanzas",
     plural: "Finanzas",

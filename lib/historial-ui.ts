@@ -43,6 +43,8 @@ export const ENTIDAD_TIPO_LABEL: Record<string, string> = {
   regla_descuento:  "Regla de descuento",
   venta:            DOMINIO.ventas.singular,
   compra:           DOMINIO.compras.singular,
+  gasto:            DOMINIO.gastos.singular,
+  movimiento_caja:  "Movimiento de caja",
 }
 
 // Link a la entidad desde el historial. Los módulos cosechados registran su
@@ -54,7 +56,8 @@ export const ENTIDAD_TIPO_RUTA: Record<string, string> = {
   producto:  DOMINIO.productos.ruta,
   venta:     DOMINIO.ventas.ruta,
   compra:    DOMINIO.compras.ruta,
-  // lista_precio y regla_descuento se filtran por texto en /historial (no linkeo directo).
+  gasto:     DOMINIO.gastos.ruta,
+  // movimiento_caja, lista_precio, regla_descuento se filtran por texto en /historial.
 }
 
 export function linkEntidad(tipo: string | null, id: string | null): string | null {
