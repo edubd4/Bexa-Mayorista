@@ -16,6 +16,26 @@ type AdminGuardFail = {
 }
 export type AdminGuardResult = AdminGuardOk | AdminGuardFail
 
+// Guard reusable para server actions que puede ejecutar cualquier usuario activo
+// (admin o colaborador). Uso: módulos donde admin+vendedor comparten CRUD (ej. campañas).
+export async function requireAuthenticated(): Promise<AdminGuardResult> {
+  const supabase = await createServerClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return { ok: false, error: "No autenticado" }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("rol, activo")
+    .eq("id", user.id)
+    .single()
+
+  if (!profile?.activo) return { ok: false, error: "Usuario inactivo" }
+  return { ok: true, supabase, user }
+}
+
 // Guard reusable para server actions que solo pueden ejecutar admins.
 export async function requireAdmin(): Promise<AdminGuardResult> {
   const supabase = await createServerClient()

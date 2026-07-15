@@ -20,6 +20,7 @@ import {
   Settings,
   AlertTriangle,
   ScrollText,
+  Megaphone,
   UserRoundSearch,
   type LucideIcon,
 } from "lucide-react"
@@ -42,5 +43,6 @@ export const ICONS: Record<IconKey, LucideIcon> = {
   Settings,
   AlertTriangle,
   ScrollText,
+  Megaphone,
   UserRoundSearch,
 }

@@ -36,6 +36,8 @@ export const ventaSchema = z.object({
     ESTADO_ENTREGA.PEDIDO,
     ESTADO_ENTREGA.EN_PREPARACION,
   ]).default(ESTADO_ENTREGA.ENTREGADA),
+  // Atribución MANUAL: el vendedor elige la campaña al facturar. Opcional.
+  campana_id:      z.preprocess(emptyToUndef, z.string().uuid().optional()),
 })
 export type VentaInput = z.infer<typeof ventaSchema>
 

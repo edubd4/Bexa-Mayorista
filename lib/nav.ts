@@ -22,6 +22,7 @@ export type IconKey =
   | "Settings"
   | "AlertTriangle"
   | "ScrollText"
+  | "Megaphone"
   | "UserRoundSearch"
 
 export type NavItem = {
@@ -71,6 +72,13 @@ export const NAV: NavGroup[] = [
       { label: "Finanzas",            href: "/finanzas",         iconKey: "Landmark",   roles: [ROL.ADMIN] },
       { label: "Contabilidad",        href: "/contabilidad",     iconKey: "Calculator", roles: [ROL.ADMIN] },
       { label: "Comisiones",          href: "/comisiones",       iconKey: "BarChart3"                     },
+    ],
+  },
+  {
+    label: "Marketing",
+    items: [
+      { label: DOMINIO.campanas.plural, href: DOMINIO.campanas.ruta,       iconKey: "Megaphone"    },
+      { label: "Calendario",             href: "/campanas/calendario",     iconKey: "CalendarDays" },
     ],
   },
   {
