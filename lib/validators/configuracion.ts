@@ -12,10 +12,11 @@ export type ConfiguracionUpdate = z.infer<typeof configuracionUpdateSchema>
 // Cada módulo cosechado agrega sus claves (y sus CONFIG_FIELDS) al integrarse:
 // parámetros propios + su `prefijo_<modulo>` de id_publico.
 export const CONFIG_KEYS = {
-  NEGOCIO_NOMBRE:    "negocio_nombre",
-  NEGOCIO_TELEFONO:  "negocio_telefono",
-  NEGOCIO_DIRECCION: "negocio_direccion",
-  MONEDA_DEFAULT:    "moneda_default",
+  NEGOCIO_NOMBRE:          "negocio_nombre",
+  NEGOCIO_TELEFONO:        "negocio_telefono",
+  NEGOCIO_DIRECCION:       "negocio_direccion",
+  MONEDA_DEFAULT:          "moneda_default",
+  TEMPLATE_REACTIVACION:   "template_reactivacion",
 } as const
 
 // Defaults hardcoded para claves de config. Si la fila no existe en la tabla
@@ -72,5 +73,12 @@ export const CONFIG_FIELDS: ConfigFieldSpec[] = [
     label: "Moneda por defecto",
     descripcion: "ARS o USD. Se usa cuando no se especifica otra.",
     tipo: "moneda",
+  },
+  {
+    clave: CONFIG_KEYS.TEMPLATE_REACTIVACION,
+    label: "Mensaje de reactivación",
+    descripcion: "Texto que se copia desde /seguimiento. Placeholders: {cliente}, {negocio}, {dias}.",
+    tipo: "text",
+    placeholder: "Hola {cliente}, hace {dias} días que no te vemos por {negocio}…",
   },
 ]
