@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { zUuid } from "./shared"
 
 const emptyToUndef = (v: unknown) => (v === "" ? undefined : v)
 
@@ -21,14 +22,14 @@ export type EstadoCobro = typeof ESTADO_COBRO[keyof typeof ESTADO_COBRO]
 
 // ─── Item de venta (input) ──────────────────────────────────────────────────
 export const ventaItemSchema = z.object({
-  producto_id: z.string().uuid(),
+  producto_id: zUuid(),
   cantidad:    z.number().int().positive("Cantidad debe ser > 0"),
 })
 export type VentaItemInput = z.infer<typeof ventaItemSchema>
 
 // ─── Venta (input) ──────────────────────────────────────────────────────────
 export const ventaSchema = z.object({
-  cliente_id:      z.string().uuid("Elegí un cliente"),
+  cliente_id:      zUuid("Elegí un cliente"),
   items:           z.array(ventaItemSchema).min(1, "Agregá al menos un producto"),
   notas:           z.preprocess(emptyToUndef, z.string().trim().max(1000).optional()),
   estado_entrega:  z.enum([
@@ -37,21 +38,21 @@ export const ventaSchema = z.object({
     ESTADO_ENTREGA.EN_PREPARACION,
   ]).default(ESTADO_ENTREGA.ENTREGADA),
   // Atribución MANUAL: el vendedor elige la campaña al facturar. Opcional.
-  campana_id:      z.preprocess(emptyToUndef, z.string().uuid().optional()),
+  campana_id:      z.preprocess(emptyToUndef, zUuid().optional()),
 })
 export type VentaInput = z.infer<typeof ventaSchema>
 
 // ─── Cancelar venta ────────────────────────────────────────────────────────
 export const cancelarVentaSchema = z.object({
-  venta_id: z.string().uuid(),
+  venta_id: zUuid(),
   motivo:   z.preprocess(emptyToUndef, z.string().trim().max(500).optional()),
 })
 export type CancelarVentaInput = z.infer<typeof cancelarVentaSchema>
 
 // ─── Preview de precio (llama a resolver_precio via server action) ─────────
 export const resolverPrecioParamsSchema = z.object({
-  cliente_id:  z.string().uuid(),
-  producto_id: z.string().uuid(),
+  cliente_id:  zUuid(),
+  producto_id: zUuid(),
   cantidad:    z.number().int().positive(),
 })
 export type ResolverPrecioParams = z.infer<typeof resolverPrecioParamsSchema>

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { zUuid } from "./shared"
 
 // ─── Enums (matchean con el schema SQL) ─────────────────────────────────────
 export const ESTADO_CAMPANA_MANUAL = {
@@ -41,11 +42,11 @@ const campanaBase = z.object({
   fecha_fin:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"),
   estado_manual:        z.nativeEnum(ESTADO_CAMPANA_MANUAL).nullable().optional(),
   presupuesto_estimado: z.coerce.number().min(0).default(0),
-  gasto_id:             z.preprocess(emptyToUndef, z.string().uuid().optional()),
+  gasto_id:             z.preprocess(emptyToUndef, zUuid().optional()),
   notas:                z.preprocess(emptyToUndef, z.string().trim().max(2000).optional()),
   // M:N — enviadas como arrays de IDs
   canal_ids:            z.array(z.coerce.number().int().positive()).default([]),
-  producto_ids:         z.array(z.string().uuid()).default([]),
+  producto_ids:         z.array(zUuid()).default([]),
 })
 
 export const campanaSchema = campanaBase.refine(
@@ -61,7 +62,7 @@ export type CampanaUpdate = z.infer<typeof campanaUpdateSchema>
 
 // ─── Schema Publicación ────────────────────────────────────────────────────
 export const publicacionSchema = z.object({
-  campana_id:         z.string().uuid(),
+  campana_id:         zUuid(),
   canal_id:           z.preprocess(emptyToUndef, z.coerce.number().int().positive().optional()),
   titulo:             z.preprocess(emptyToUndef, z.string().trim().max(200).optional()),
   cuerpo:             z.string().trim().min(1, "Cuerpo requerido").max(5000),

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { zUuid } from "./shared"
 
 const emptyToUndef = (v: unknown) => (v === "" ? undefined : v)
 const numeroPreprocess = (v: unknown): unknown => {
@@ -37,7 +38,7 @@ export type MetodoPago = typeof METODO_PAGO[keyof typeof METODO_PAGO]
 
 // ─── Cobrar venta ──────────────────────────────────────────────────────────
 export const cobrarVentaSchema = z.object({
-  venta_id:    z.string().uuid(),
+  venta_id:    zUuid(),
   monto:       z.preprocess(numeroPreprocess, z.number().positive("Monto debe ser > 0")),
   metodo:      z.enum([
     METODO_PAGO.EFECTIVO,       METODO_PAGO.TRANSFERENCIA,

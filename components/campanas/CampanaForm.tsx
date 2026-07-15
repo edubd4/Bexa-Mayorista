@@ -6,6 +6,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { MoneyInput } from "@/components/ui/number-input"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/toast"
 import { CanalesMultiSelect } from "@/components/campanas/CanalesMultiSelect"
@@ -130,14 +131,11 @@ export function CampanaForm({ mode, campanaId, initial, canales, productos }: Pr
 
           <div className="space-y-2">
             <Label htmlFor="presupuesto">Presupuesto estimado</Label>
-            <Input
+            <MoneyInput
               id="presupuesto"
-              type="number"
               min={0}
-              step="0.01"
-              value={form.presupuesto_estimado}
-              onChange={(e) => update("presupuesto_estimado", Number(e.target.value))}
-              placeholder="0"
+              value={form.presupuesto_estimado || null}
+              onChange={(v) => update("presupuesto_estimado", v ?? 0)}
             />
             <p className="text-xs text-app-muted">
               Referencia visual. El costo real se toma del gasto asociado (si hay).
