@@ -74,6 +74,7 @@ export async function registrarVenta(input: VentaInput): Promise<ActionResult> {
     })),
     p_notas:           parsed.data.notas ?? null,
     p_estado_entrega:  parsed.data.estado_entrega,
+    p_campana_id:      parsed.data.campana_id ?? null,
   })
 
   if (error || !ventaId) {

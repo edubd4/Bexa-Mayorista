@@ -17,7 +17,7 @@ export default async function NuevaVentaPage() {
     .single()
   if (!profile?.activo) redirect("/login")
 
-  const [{ data: clientes }, { data: productos }] = await Promise.all([
+  const [{ data: clientes }, { data: productos }, { data: campanas }] = await Promise.all([
     supabase
       .from("clientes")
       .select("id, id_publico, nombre, apellido, razon_social, tipo, lista_precio_id")
@@ -31,6 +31,12 @@ export default async function NuevaVentaPage() {
       .eq("activo", true)
       .order("nombre")
       .limit(500),
+    supabase
+      .from("v_campanas")
+      .select("id, id_publico, nombre")
+      .eq("estado_efectivo", "ACTIVA")
+      .order("fecha_inicio", { ascending: false })
+      .limit(50),
   ])
 
   const ent = DOMINIO.ventas
@@ -62,6 +68,7 @@ export default async function NuevaVentaPage() {
         <VentaForm
           clientes={(clientes ?? []) as Parameters<typeof VentaForm>[0]["clientes"]}
           productos={(productos ?? []) as Parameters<typeof VentaForm>[0]["productos"]}
+          campanasActivas={(campanas ?? []) as NonNullable<Parameters<typeof VentaForm>[0]["campanasActivas"]>}
         />
       </div>
     </div>

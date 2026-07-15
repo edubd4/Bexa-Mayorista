@@ -59,9 +59,16 @@ type LineaBorrador = {
   precio:     PrecioResuelto | null
 }
 
+type CampanaOption = {
+  id: string
+  id_publico: string
+  nombre: string
+}
+
 type Props = {
   clientes:  ClienteOption[]
   productos: ProductoOption[]
+  campanasActivas?: CampanaOption[]
 }
 
 function nombreCliente(c: ClienteOption): string {
@@ -72,11 +79,12 @@ function nombreCliente(c: ClienteOption): string {
 let seq = 0
 const nextKey = () => `linea-${++seq}-${Date.now()}`
 
-export function VentaForm({ clientes, productos }: Props) {
+export function VentaForm({ clientes, productos, campanasActivas = [] }: Props) {
   const toast = useToast()
   const [clienteId, setClienteId] = useState<string>(clientes[0]?.id ?? "")
   const [estadoEntrega, setEstadoEntrega] = useState<EstadoEntregaEditable>(ESTADO_ENTREGA.ENTREGADA)
   const [notas, setNotas] = useState("")
+  const [campanaId, setCampanaId] = useState<string>("")
   const [lineas, setLineas] = useState<LineaBorrador[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -192,6 +200,7 @@ export function VentaForm({ clientes, productos }: Props) {
       items,
       notas:           notas.trim() || undefined,
       estado_entrega:  estadoEntrega,
+      campana_id:      campanaId || undefined,
     }
 
     startTransition(async () => {
@@ -242,6 +251,26 @@ export function VentaForm({ clientes, productos }: Props) {
               El stock sale al registrar (reserva). El estado es solo logística.
             </p>
           </div>
+          {campanasActivas.length > 0 && (
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="campana">Campaña de marketing (opcional)</Label>
+              <Select
+                id="campana"
+                value={campanaId}
+                onChange={(e) => setCampanaId(e.target.value)}
+              >
+                <option value="">— sin campaña —</option>
+                {campanasActivas.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.id_publico} · {c.nombre}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-[11px] text-app-muted font-mono">
+                Atribuí la venta a una campaña activa para medir su impacto.
+              </p>
+            </div>
+          )}
         </div>
       </section>
 
