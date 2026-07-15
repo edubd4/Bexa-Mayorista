@@ -56,7 +56,7 @@ function groupThousands(digits: string): string {
 function formatLive(raw: string, decimals: number): string {
   const isNegative = raw.trimStart().startsWith("-")
   // Nos quedamos solo con dígitos y comas
-  let cleaned = raw.replace(/[^\d,]/g, "")
+  const cleaned = raw.replace(/[^\d,]/g, "")
 
   let integerPart = cleaned
   let decimalPart: string | null = null
