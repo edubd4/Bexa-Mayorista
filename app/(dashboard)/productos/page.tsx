@@ -30,12 +30,13 @@ type ProductoRow = {
   stock_actual: number
   stock_minimo: number
   activo: boolean
+  proveedor: { id: string; nombre: string } | null
 }
 
 export default async function ProductosPage({
   searchParams,
 }: {
-  searchParams: { q?: string; estado?: string; categoria?: string; stock?: string }
+  searchParams: { q?: string; estado?: string; categoria?: string; stock?: string; proveedor?: string }
 }) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -54,8 +55,8 @@ export default async function ProductosPage({
   // aunque la RLS de `productos` es admin-only, el fetch va a la vista para vendedor.
   const table = esAdmin ? "productos" : "productos_catalogo"
   const columns = esAdmin
-    ? "id, id_publico, sku, nombre, categoria, marca, costo, precio_base, stock_actual, stock_minimo, activo"
-    : "id, id_publico, sku, nombre, categoria, marca, precio_base, stock_actual, stock_minimo, activo"
+    ? "id, id_publico, sku, nombre, categoria, marca, costo, precio_base, stock_actual, stock_minimo, activo, proveedor:proveedor_id (id, nombre)"
+    : "id, id_publico, sku, nombre, categoria, marca, precio_base, stock_actual, stock_minimo, activo, proveedor:proveedor_id (id, nombre)"
 
   const q = (searchParams.q ?? "").trim()
   const estadoFilter = searchParams.estado === "inactivos" ? false
@@ -73,6 +74,9 @@ export default async function ProductosPage({
   if (searchParams.categoria && searchParams.categoria !== "") {
     query = query.eq("categoria", searchParams.categoria)
   }
+  if (searchParams.proveedor && searchParams.proveedor !== "") {
+    query = query.eq("proveedor_id", searchParams.proveedor)
+  }
   if (q.length >= 2) {
     const like = `%${q.replace(/[,()]/g, " ")}%`
     query = query.or(
@@ -86,8 +90,12 @@ export default async function ProductosPage({
     )
   }
 
-  const { data } = await query
+  const [{ data }, { data: proveedoresData }] = await Promise.all([
+    query,
+    supabase.from("proveedores").select("id, nombre").eq("activo", true).order("nombre"),
+  ])
   let productos = ((data ?? []) as unknown as ProductoRow[])
+  const proveedores = proveedoresData ?? []
 
   // Filtro de stock bajo se hace en JS (no podemos comparar dos columnas en supabase-js).
   if (stockFilter) {
@@ -148,6 +156,14 @@ export default async function ProductosPage({
             {categorias.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
           <select
+            name="proveedor"
+            defaultValue={searchParams.proveedor ?? ""}
+            className="h-10 rounded-md bg-app-input border border-app-line px-3 text-sm text-app-text"
+          >
+            <option value="">Todos los proveedores</option>
+            {proveedores.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+          </select>
+          <select
             name="stock"
             defaultValue={searchParams.stock ?? ""}
             className="h-10 rounded-md bg-app-input border border-app-line px-3 text-sm text-app-text"
@@ -176,6 +192,7 @@ export default async function ProductosPage({
                 <TableHead>Nombre</TableHead>
                 <TableHead className="hidden md:table-cell">Marca</TableHead>
                 <TableHead className="hidden lg:table-cell">Categoría</TableHead>
+                <TableHead className="hidden xl:table-cell">Proveedor</TableHead>
                 {esAdmin && <TableHead className="hidden md:table-cell text-right">Costo</TableHead>}
                 <TableHead className="text-right">Precio base</TableHead>
                 <TableHead className="text-right">Stock</TableHead>
@@ -184,8 +201,8 @@ export default async function ProductosPage({
             </TableHeader>
             <TableBody>
               {productos.length === 0 ? (
-                <TableEmpty colSpan={esAdmin ? 8 : 7}>
-                  {q.length >= 2 || stockFilter || searchParams.categoria
+                <TableEmpty colSpan={esAdmin ? 9 : 8}>
+                  {q.length >= 2 || stockFilter || searchParams.categoria || searchParams.proveedor
                     ? "Sin resultados para los filtros aplicados."
                     : "Todavía no cargaste productos."}
                 </TableEmpty>
@@ -204,12 +221,24 @@ export default async function ProductosPage({
                             {p.sku}
                           </span>
                         )}
+                        {Number(p.precio_base) === 0 && (
+                          <span
+                            className="ml-2 inline-flex items-center gap-1 font-mono text-[10px] text-app-amber"
+                            title="Cargado rápido desde una compra — falta completar el precio de venta"
+                          >
+                            <AlertTriangle className="w-3 h-3" />
+                            incompleto
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-sm text-app-secondary">
                         {p.marca ?? "—"}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-sm text-app-secondary">
                         {p.categoria ?? "—"}
+                      </TableCell>
+                      <TableCell className="hidden xl:table-cell text-sm text-app-secondary">
+                        {p.proveedor?.nombre ?? "—"}
                       </TableCell>
                       {esAdmin && (
                         <TableCell className="hidden md:table-cell text-right font-mono text-sm">

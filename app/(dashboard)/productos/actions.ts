@@ -49,6 +49,61 @@ export async function createProducto(input: ProductoInput): Promise<ActionResult
   redirect(`${DOMINIO.productos.ruta}/${data.id}`)
 }
 
+// ─── Quick-create desde el form de compras ──────────────────────────────────
+// Producto con la info mínima viable (nombre + costo + proveedor/categoría
+// opcionales). precio_base queda en 0 → la lista lo marca "incompleto" hasta
+// que el admin lo complete. NO redirige — devuelve el producto para que el
+// form de compra lo agregue en línea.
+type QuickCreateResult =
+  | { ok: false; error: string }
+  | { ok: true; producto: { id: string; id_publico: string; nombre: string; costo: number; stock_actual: number } }
+
+export async function quickCreateProducto(input: {
+  nombre: string
+  costo: number
+  categoria?: string
+  proveedor_id?: string
+}): Promise<QuickCreateResult> {
+  const nombre = (input.nombre ?? "").trim()
+  if (nombre.length < 2) return { ok: false, error: "Nombre demasiado corto" }
+  if (typeof input.costo !== "number" || !Number.isFinite(input.costo) || input.costo < 0) {
+    return { ok: false, error: "Costo inválido" }
+  }
+
+  const guard = await requireAdmin()
+  if (!guard.ok) return { ok: false, error: guard.error }
+  const { supabase, user } = guard
+
+  const { data, error } = await supabase
+    .from("productos")
+    .insert({
+      nombre,
+      costo: input.costo,
+      precio_base: 0,           // señal de "incompleto" — falta precio de venta
+      categoria: input.categoria?.trim() || null,
+      proveedor_id: input.proveedor_id || null,
+      created_by: user.id,
+      updated_by: user.id,
+    })
+    .select("id, id_publico, nombre, costo, stock_actual")
+    .single()
+
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "No se pudo crear el producto" }
+  }
+
+  await logHistorial(supabase, {
+    tipo: TIPO_EVENTO.ALTA,
+    descripcion: `Producto ${data.id_publico} · ${data.nombre} (carga rápida desde compra — completar precio)`,
+    entidadTipo: "producto",
+    entidadId: data.id_publico,
+    userId: user.id,
+  })
+
+  revalidatePath(DOMINIO.productos.ruta)
+  return { ok: true, producto: { ...data, costo: Number(data.costo) } }
+}
+
 export async function updateProducto(id: string, input: ProductoInput): Promise<ActionResult> {
   const parsed = productoSchema.safeParse(input)
   if (!parsed.success) {
