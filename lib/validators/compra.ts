@@ -31,6 +31,8 @@ export const compraSchema = z.object({
   items:           z.array(compraItemSchema).min(1, "Agregá al menos un producto"),
   numero_factura:  z.preprocess(emptyToUndef, z.string().trim().max(60).optional()),
   notas:           z.preprocess(emptyToUndef, z.string().trim().max(1000).optional()),
+  // Fecha real de la compra (factura vieja que se carga después). Si no viene, now().
+  fecha:           z.preprocess(emptyToUndef, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida").optional()),
 })
 export type CompraInput = z.infer<typeof compraSchema>
 

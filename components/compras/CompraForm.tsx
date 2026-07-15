@@ -52,6 +52,7 @@ export function CompraForm({ proveedores, productos }: Props) {
   const toast = useToast()
   const [proveedorId, setProveedorId] = useState(proveedores[0]?.id ?? "")
   const [numeroFactura, setNumeroFactura] = useState("")
+  const [fecha, setFecha] = useState("")   // vacío = hoy (lo resuelve el server)
   const [notas, setNotas] = useState("")
   const [lineas, setLineas] = useState<Linea[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -122,6 +123,7 @@ export function CompraForm({ proveedores, productos }: Props) {
       })),
       numero_factura: numeroFactura.trim() || undefined,
       notas: notas.trim() || undefined,
+      fecha: fecha || undefined,
     }
 
     startTransition(async () => {
@@ -160,6 +162,18 @@ export function CompraForm({ proveedores, productos }: Props) {
               onChange={(e) => setNumeroFactura(e.target.value)}
               placeholder="Ej. 0001-00012345"
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="fecha_compra">Fecha de la compra</Label>
+            <Input
+              id="fecha_compra"
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+            />
+            <p className="text-[11px] text-app-muted font-mono">
+              Dejalo vacío para usar hoy. Útil para cargar facturas viejas.
+            </p>
           </div>
         </div>
       </section>

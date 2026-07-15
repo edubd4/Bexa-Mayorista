@@ -93,7 +93,12 @@ export function estadoEfectivo(c: {
   estado_manual: EstadoCampanaManual | null | undefined
 }): EstadoCampanaEfectivo {
   if (c.estado_manual) return c.estado_manual
-  const hoy = new Date().toISOString().slice(0, 10)
+  // Fecha local Argentina — mismo criterio que hoy_local() en SQL (fix F audit).
+  // toISOString() daría UTC y correría el día a las 21:00 hora AR.
+  const hoy = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date())
   if (hoy < c.fecha_inicio) return ESTADO_CAMPANA_EFECTIVO.PROGRAMADA
   if (hoy > c.fecha_fin)    return ESTADO_CAMPANA_EFECTIVO.CONCLUIDA
   return ESTADO_CAMPANA_EFECTIVO.ACTIVA

@@ -34,7 +34,8 @@ export async function recibirCompra(input: CompraInput): Promise<ActionResult> {
     })),
     p_numero_factura:  parsed.data.numero_factura ?? null,
     p_notas:           parsed.data.notas ?? null,
-    p_fecha:           null,
+    // date-only → mediodía local para evitar que el corte UTC lo corra de día
+    p_fecha:           parsed.data.fecha ? `${parsed.data.fecha}T12:00:00-03:00` : null,
   })
 
   if (error || !compraId) {
