@@ -132,6 +132,14 @@ export const DOMINIO = {
     icono: "AlertTriangle",
     genero: "f",
   },
+  campanas: {
+    singular: "Campaña",
+    plural: "Campañas",
+    ruta: "/campanas",
+    prefijoId: "CAMP",
+    icono: "Megaphone",
+    genero: "f",
+  },
 } satisfies Record<string, EntidadDominio>
 
 export type EntidadKey = keyof typeof DOMINIO
