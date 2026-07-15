@@ -132,6 +132,13 @@ export const DOMINIO = {
     icono: "AlertTriangle",
     genero: "f",
   },
+  seguimiento: {
+    singular: "Cliente inactivo",
+    plural: "Seguimiento",
+    ruta: "/seguimiento",
+    icono: "UserRoundSearch",
+    genero: "m",
+  },
   campanas: {
     singular: "Campaña",
     plural: "Campañas",

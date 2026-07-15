@@ -21,6 +21,7 @@ import {
   AlertTriangle,
   ScrollText,
   Megaphone,
+  UserRoundSearch,
   type LucideIcon,
 } from "lucide-react"
 import type { IconKey } from "@/lib/nav"
@@ -43,4 +44,5 @@ export const ICONS: Record<IconKey, LucideIcon> = {
   AlertTriangle,
   ScrollText,
   Megaphone,
+  UserRoundSearch,
 }
