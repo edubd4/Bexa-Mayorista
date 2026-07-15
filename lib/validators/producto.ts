@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { zUuid } from "./shared"
 
 const emptyToUndef = (v: unknown) => (v === "" ? undefined : v)
 
@@ -38,7 +39,7 @@ export const productoSchema = z.object({
   categoria:     z.preprocess(emptyToUndef, z.string().trim().max(120).optional()),
   marca:         z.preprocess(emptyToUndef, z.string().trim().max(120).optional()),
   atributos:     z.preprocess(atributosPreprocess, z.record(z.string(), z.string()).default({})),
-  proveedor_id:  z.preprocess(emptyToUndef, z.string().uuid().optional()),
+  proveedor_id:  z.preprocess(emptyToUndef, zUuid().optional()),
   costo:         z.preprocess(numeroPreprocess, z.number().nonnegative("El costo no puede ser negativo").default(0)),
   precio_base:   z.preprocess(numeroPreprocess, z.number().nonnegative("El precio no puede ser negativo").default(0)),
   comision_pct:  z.preprocess(numeroPreprocess, z.number().min(0).max(100, "La comisión va de 0 a 100").optional()),
@@ -65,7 +66,7 @@ export const TIPO_MOV_STOCK = {
 export type TipoMovStock = typeof TIPO_MOV_STOCK[keyof typeof TIPO_MOV_STOCK]
 
 export const movimientoStockSchema = z.object({
-  producto_id: z.string().uuid(),
+  producto_id: zUuid(),
   tipo: z.enum([
     TIPO_MOV_STOCK.ENTRADA,
     TIPO_MOV_STOCK.SALIDA,

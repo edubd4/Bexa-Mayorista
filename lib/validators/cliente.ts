@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { zUuid } from "./shared"
 
 const emptyToUndef = (v: unknown) => (v === "" ? undefined : v)
 
@@ -28,7 +29,7 @@ export const clienteSchema = z.object({
   direccion:       z.preprocess(emptyToUndef, z.string().trim().max(200).optional()),
   ciudad:          z.preprocess(emptyToUndef, z.string().trim().max(120).optional()),
   provincia:       z.preprocess(emptyToUndef, z.string().trim().max(120).optional()),
-  lista_precio_id: z.preprocess(emptyToUndef, z.string().uuid().optional()),
+  lista_precio_id: z.preprocess(emptyToUndef, zUuid().optional()),
   notas:           z.preprocess(emptyToUndef, z.string().trim().max(2000).optional()),
 })
   .refine(

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { zUuid } from "./shared"
 
 const emptyToUndef = (v: unknown) => (v === "" ? undefined : v)
 
@@ -13,14 +14,14 @@ const numeroPreprocess = (v: unknown): unknown => {
 
 export const listaPrecioSchema = z.object({
   nombre:       z.string().trim().min(1, "El nombre es obligatorio").max(120),
-  proveedor_id: z.preprocess(emptyToUndef, z.string().uuid().optional()),
+  proveedor_id: z.preprocess(emptyToUndef, zUuid().optional()),
   notas:        z.preprocess(emptyToUndef, z.string().trim().max(1000).optional()),
 })
 export type ListaPrecioInput = z.infer<typeof listaPrecioSchema>
 
 export const listaPrecioItemSchema = z.object({
-  lista_precio_id: z.string().uuid(),
-  producto_id:     z.string().uuid(),
+  lista_precio_id: zUuid(),
+  producto_id:     zUuid(),
   precio:          z.preprocess(numeroPreprocess, z.number().nonnegative("El precio no puede ser negativo")),
 })
 export type ListaPrecioItemInput = z.infer<typeof listaPrecioItemSchema>
@@ -33,13 +34,13 @@ export const SCOPE_DESCUENTO = {
 export type ScopeDescuento = typeof SCOPE_DESCUENTO[keyof typeof SCOPE_DESCUENTO]
 
 export const reglaDescuentoSchema = z.object({
-  lista_precio_id: z.preprocess(emptyToUndef, z.string().uuid().optional()),
+  lista_precio_id: z.preprocess(emptyToUndef, zUuid().optional()),
   scope: z.enum([
     SCOPE_DESCUENTO.PRODUCTO,
     SCOPE_DESCUENTO.CATEGORIA,
     SCOPE_DESCUENTO.GLOBAL,
   ]),
-  producto_id:   z.preprocess(emptyToUndef, z.string().uuid().optional()),
+  producto_id:   z.preprocess(emptyToUndef, zUuid().optional()),
   categoria:     z.preprocess(emptyToUndef, z.string().trim().max(120).optional()),
   cantidad_min:  z.preprocess(numeroPreprocess, z.number().int().positive("La cantidad mínima debe ser > 0")),
   descuento_pct: z.preprocess(numeroPreprocess, z.number().min(0).max(100, "El descuento va de 0 a 100")),

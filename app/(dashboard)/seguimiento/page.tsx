@@ -74,12 +74,11 @@ export default async function SeguimientoPage() {
               : "Ningún cliente inactivo"}
           </h1>
           <p className="text-app-secondary mt-1">
-            Umbral configurable en{" "}
+            Clientes que dejaron de comprar. Los días de inactividad y el mensaje de
+            contacto se ajustan desde{" "}
             <Link href="/configuracion" className="underline hover:text-app-accent">
               Configuración
-            </Link>{" "}
-            (clave <code className="font-mono text-xs">alerta_cliente_inactivo_dias</code>).
-            El mensaje sale del template <code className="font-mono text-xs">template_reactivacion</code>.
+            </Link>.
           </p>
         </header>
 

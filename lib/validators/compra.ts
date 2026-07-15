@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { zUuid } from "./shared"
 
 const emptyToUndef = (v: unknown) => (v === "" ? undefined : v)
 
@@ -19,14 +20,14 @@ export const ESTADO_COMPRA = {
 export type EstadoCompra = typeof ESTADO_COMPRA[keyof typeof ESTADO_COMPRA]
 
 export const compraItemSchema = z.object({
-  producto_id:     z.string().uuid(),
+  producto_id:     zUuid(),
   cantidad:        z.preprocess(numeroPreprocess, z.number().int().positive("Cantidad debe ser > 0")),
   costo_unitario:  z.preprocess(numeroPreprocess, z.number().nonnegative("Costo unitario no puede ser negativo")),
 })
 export type CompraItemInput = z.infer<typeof compraItemSchema>
 
 export const compraSchema = z.object({
-  proveedor_id:    z.string().uuid("Elegí un proveedor"),
+  proveedor_id:    zUuid("Elegí un proveedor"),
   items:           z.array(compraItemSchema).min(1, "Agregá al menos un producto"),
   numero_factura:  z.preprocess(emptyToUndef, z.string().trim().max(60).optional()),
   notas:           z.preprocess(emptyToUndef, z.string().trim().max(1000).optional()),
@@ -34,7 +35,7 @@ export const compraSchema = z.object({
 export type CompraInput = z.infer<typeof compraSchema>
 
 export const cancelarCompraSchema = z.object({
-  compra_id: z.string().uuid(),
+  compra_id: zUuid(),
   motivo:    z.preprocess(emptyToUndef, z.string().trim().max(500).optional()),
 })
 export type CancelarCompraInput = z.infer<typeof cancelarCompraSchema>
