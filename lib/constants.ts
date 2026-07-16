@@ -9,6 +9,7 @@
 export const ROL = {
   ADMIN: 'admin',
   COLABORADOR: 'colaborador',
+  MARKETING: 'marketing',
 } as const
 export type Rol = typeof ROL[keyof typeof ROL]
 

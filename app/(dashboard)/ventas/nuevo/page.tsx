@@ -12,10 +12,12 @@ export default async function NuevaVentaPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("activo")
+    .select("rol, activo")
     .eq("id", user.id)
     .single()
   if (!profile?.activo) redirect("/login")
+  // Marketing no puede registrar ventas — el RPC lo bloquea igual, pero rebotamos acá para no mostrar UI muerta.
+  if (profile.rol === "marketing") redirect("/panel")
 
   const [{ data: clientes }, { data: productos }, { data: campanas }] = await Promise.all([
     supabase

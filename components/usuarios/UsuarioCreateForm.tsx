@@ -58,7 +58,8 @@ export function UsuarioCreateForm() {
               value={form.rol}
               onChange={(e) => update("rol", e.target.value as UsuarioCreateInput["rol"])}
             >
-              <option value="colaborador">Colaborador</option>
+              <option value="colaborador">Vendedor</option>
+              <option value="marketing">Marketing</option>
               <option value="admin">Admin</option>
             </Select>
           </div>

@@ -34,6 +34,7 @@ export default async function ProveedoresPage({
     .eq("id", user.id)
     .single()
   if (!profile?.activo) redirect("/login")
+  if (profile.rol === ROL.MARKETING) redirect("/panel")
 
   const esAdmin = profile.rol === ROL.ADMIN
 

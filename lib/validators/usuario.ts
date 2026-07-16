@@ -13,14 +13,14 @@ export const usuarioCreateSchema = z.object({
   email: z.string().trim().email("Email inválido").max(200),
   password: z.string().min(8, "Mínimo 8 caracteres").max(72),
   nombre: z.string().trim().min(1, "El nombre es obligatorio").max(120),
-  rol: z.enum(["admin", "colaborador"]),
+  rol: z.enum(["admin", "colaborador", "marketing"]),
 })
 export type UsuarioCreateInput = z.infer<typeof usuarioCreateSchema>
 
 // Edicion: no cambia email ni password (esos van en flujos aparte).
 export const usuarioUpdateSchema = z.object({
   nombre: z.string().trim().min(1, "El nombre es obligatorio").max(120),
-  rol: z.enum(["admin", "colaborador"]),
+  rol: z.enum(["admin", "colaborador", "marketing"]),
   activo: z.boolean(),
 })
 export type UsuarioUpdateInput = z.infer<typeof usuarioUpdateSchema>

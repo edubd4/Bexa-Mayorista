@@ -33,6 +33,7 @@ export const APP = {
 export const ROL_LABEL: Record<string, string> = {
   admin: "Admin",
   colaborador: "Vendedor",
+  marketing: "Marketing",
 }
 
 // ─── Entidades ────────────────────────────────────────────────────────────────
@@ -41,8 +42,8 @@ export const ROL_LABEL: Record<string, string> = {
 export const DOMINIO = {
   // ── Core ──
   usuarios: {
-    singular: "Vendedor",
-    plural: "Vendedores",
+    singular: "Usuario",
+    plural: "Usuarios",
     ruta: "/usuarios",
     icono: "UserCog",
     genero: "m",

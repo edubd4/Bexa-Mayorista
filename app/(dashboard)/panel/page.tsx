@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { Badge } from "@/components/ui/badge"
+import { AccionesRapidas } from "@/components/panel/AccionesRapidas"
 import { formatPesos } from "@/lib/utils"
 import { ahoraArgentina, toISODate, tsArgentina } from "@/lib/fechas"
 import { ROL } from "@/lib/constants"
@@ -52,9 +53,9 @@ export default async function PanelPage() {
     .single()
 
   const nombre = profile?.nombre ?? user.email ?? "Usuario"
-  const esAdmin = profile?.rol === ROL.ADMIN
-
-  if (esAdmin) return <PanelAdmin nombre={nombre} />
+  const rol = profile?.rol as "admin" | "colaborador" | "marketing" | undefined
+  if (rol === ROL.ADMIN)     return <PanelAdmin nombre={nombre} />
+  if (rol === ROL.MARKETING) return <PanelMarketing nombre={nombre} />
   return <PanelVendedor nombre={nombre} userId={user.id} />
 }
 
@@ -115,6 +116,8 @@ async function PanelAdmin({ nombre }: { nombre: string }) {
             {APP.nombre} · resumen operativo
           </p>
         </header>
+
+        <AccionesRapidas rol={ROL.ADMIN} />
 
         {totalAlertas > 0 && (
           <Link
@@ -307,6 +310,8 @@ async function PanelVendedor({ nombre, userId }: { nombre: string; userId: strin
           </h1>
         </header>
 
+        <AccionesRapidas rol={ROL.COLABORADOR} />
+
         <section className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <KPI icon={<TrendingUp className="w-4 h-4" />} label="Vendido hoy"    value={formatPesos(kpiHoy.facturado)}    sub={`${kpiHoy.ventas_count} venta${kpiHoy.ventas_count === 1 ? "" : "s"}`}  href={DOMINIO.ventas.ruta} tone="green" />
           <KPI icon={<TrendingUp className="w-4 h-4" />} label="Vendido semana" value={formatPesos(kpiSemana.facturado)} sub={`${kpiSemana.ventas_count} venta${kpiSemana.ventas_count === 1 ? "" : "s"}`} href={DOMINIO.ventas.ruta} tone="green" />
@@ -362,6 +367,122 @@ async function PanelVendedor({ nombre, userId }: { nombre: string; userId: strin
                       <Badge variant={ESTADO_COBRO_VARIANT[v.estado_cobro]}>{ESTADO_COBRO_LABEL[v.estado_cobro]}</Badge>
                     </div>
                   </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </div>
+  )
+}
+
+// ─── Marketing ──────────────────────────────────────────────────────────────
+async function PanelMarketing({ nombre }: { nombre: string }) {
+  const supabase = await createServerClient()
+  const [{ data: campanas }, { data: inactivos }] = await Promise.all([
+    supabase
+      .from("v_campanas")
+      .select("id, id_publico, nombre, fecha_inicio, fecha_fin, estado_efectivo, publicaciones_count")
+      .in("estado_efectivo", ["ACTIVA", "PROGRAMADA"])
+      .order("fecha_inicio", { ascending: false })
+      .limit(6),
+    supabase
+      .from("v_clientes_inactivos")
+      .select("id, id_publico, nombre, apellido, razon_social, tipo, dias_sin_comprar")
+      .gte("dias_sin_comprar", 60)
+      .order("dias_sin_comprar", { ascending: false })
+      .limit(5),
+  ])
+
+  const camps = (campanas ?? []) as Array<{
+    id: string; id_publico: string; nombre: string;
+    fecha_inicio: string; fecha_fin: string;
+    estado_efectivo: string; publicaciones_count: number
+  }>
+  const inact = ((inactivos ?? []) as unknown as Array<{
+    id: string; id_publico: string;
+    nombre: string; apellido: string | null; razon_social: string | null;
+    tipo: TipoCliente; dias_sin_comprar: number
+  }>).filter((c) => c.dias_sin_comprar != null)
+
+  return (
+    <div className="app-circuit min-h-[calc(100vh-4rem)] px-6 md:px-10 py-8">
+      <div className="max-w-4xl mx-auto space-y-6">
+        <header>
+          <p className="font-mono text-[11px] text-app-accent tracking-[0.18em] uppercase">
+            Panel · Marketing
+          </p>
+          <h1 className="font-display text-3xl md:text-4xl font-bold mt-1">
+            Hola, {nombre}
+          </h1>
+          <p className="text-app-secondary mt-1">
+            {APP.nombre} · centro de campañas
+          </p>
+        </header>
+
+        <AccionesRapidas rol={ROL.MARKETING} />
+
+        <section className="rounded-xl border border-app-line-soft bg-app-card p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display font-semibold">Campañas activas y próximas</h2>
+            <Link href={DOMINIO.campanas.ruta} className="text-xs font-mono text-app-muted hover:text-app-accent">
+              Ver todas →
+            </Link>
+          </div>
+          {camps.length === 0 ? (
+            <p className="text-sm text-app-muted font-mono">
+              Ninguna campaña activa ni programada. Arrancá una nueva desde arriba.
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {camps.map((c) => (
+                <li key={c.id}>
+                  <Link
+                    href={`${DOMINIO.campanas.ruta}/${c.id}`}
+                    className="flex items-center justify-between gap-3 px-3 py-2 rounded-md hover:bg-app-surface-mid/50"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="font-mono text-app-accent text-xs shrink-0">{c.id_publico}</span>
+                      <span className="text-sm text-app-text truncate">{c.nombre}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs text-app-muted font-mono">
+                        {c.publicaciones_count} pub.
+                      </span>
+                      <Badge variant={c.estado_efectivo === "ACTIVA" ? "green" : "outline"}>
+                        {c.estado_efectivo}
+                      </Badge>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="rounded-xl border border-app-line-soft bg-app-card p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display font-semibold">Clientes para reactivar</h2>
+            <Link href={DOMINIO.seguimiento.ruta} className="text-xs font-mono text-app-muted hover:text-app-accent">
+              Ver seguimiento →
+            </Link>
+          </div>
+          {inact.length === 0 ? (
+            <p className="text-sm text-app-muted font-mono">Nadie inactivo. Buen trabajo.</p>
+          ) : (
+            <ul className="space-y-1">
+              {inact.map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="font-mono text-app-accent text-xs shrink-0">{c.id_publico}</span>
+                    <span className="text-sm text-app-text truncate">
+                      {nombreVisible(c)}
+                    </span>
+                  </div>
+                  <span className="text-xs font-mono text-app-amber shrink-0">
+                    {c.dias_sin_comprar} días
+                  </span>
                 </li>
               ))}
             </ul>

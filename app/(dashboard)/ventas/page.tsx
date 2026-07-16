@@ -56,6 +56,8 @@ export default async function VentasPage({
     .eq("id", user.id)
     .single()
   if (!profile?.activo) redirect("/login")
+  // Marketing no vende ni cobra comisiones — no ve el módulo.
+  if (profile.rol === ROL.MARKETING) redirect("/panel")
 
   const esAdmin = profile.rol === ROL.ADMIN
 
