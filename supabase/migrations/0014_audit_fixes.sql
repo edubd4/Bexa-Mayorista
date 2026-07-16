@@ -36,7 +36,11 @@ $$;
 grant execute on function public.hoy_local() to authenticated;
 
 -- ─── A. v_campana_metricas sin fan-out ──────────────────────────────────────
-create or replace view public.v_campana_metricas as
+-- Nota: usamos DROP + CREATE en vez de CREATE OR REPLACE — Postgres 42P16 rechaza
+-- CREATE OR REPLACE VIEW si cambia la firma (nombre/tipo/orden) de cualquier
+-- columna, aunque sea idéntica en apariencia. GRANT + REVOKE se re-aplican abajo.
+drop view if exists public.v_campana_metricas;
+create view public.v_campana_metricas as
   with base_manual as (
     select
       v.campana_id,
@@ -95,8 +99,13 @@ create or replace view public.v_campana_metricas as
   left join base_auto   ba on ba.campana_id = c.id
   left join public.gastos g on g.id = c.gasto_id;
 
+-- Re-aplicar grants/revoke (DROP los borra)
+grant select on public.v_campana_metricas to authenticated;
+revoke all  on public.v_campana_metricas from anon;
+
 -- ─── B. v_comisiones_semana excluye ventas canceladas ───────────────────────
-create or replace view public.v_comisiones_semana as
+drop view if exists public.v_comisiones_semana;
+create view public.v_comisiones_semana as
   select
     co.vendedor_id,
     date_trunc('week', co.fecha)::date as semana_inicio,
@@ -108,8 +117,12 @@ create or replace view public.v_comisiones_semana as
   where v.estado_cobro <> 'CANCELADA'
   group by co.vendedor_id, date_trunc('week', co.fecha);
 
+grant select on public.v_comisiones_semana to authenticated;
+revoke all  on public.v_comisiones_semana from anon;
+
 -- ─── C. v_ranking_productos sin unidades de canceladas ──────────────────────
-create or replace view public.v_ranking_productos as
+drop view if exists public.v_ranking_productos;
+create view public.v_ranking_productos as
   select
     p.id, p.id_publico, p.nombre, p.categoria, p.marca,
     coalesce(sum(vi.cantidad), 0)::integer as unidades_vendidas,
@@ -230,8 +243,12 @@ create policy "movstock_insert_admin"
   to authenticated
   with check (public.current_user_rol() = 'admin');
 
+grant select on public.v_ranking_productos to authenticated;
+revoke all  on public.v_ranking_productos from anon;
+
 -- ─── F (cont.). v_campanas con fecha local AR ───────────────────────────────
-create or replace view public.v_campanas as
+drop view if exists public.v_campanas;
+create view public.v_campanas as
   select
     c.*,
     coalesce(
@@ -260,6 +277,9 @@ create or replace view public.v_campanas as
     ) as publicaciones_count
   from public.campanas c
   left join public.gastos g on g.id = c.gasto_id;
+
+grant select on public.v_campanas to authenticated;
+revoke all  on public.v_campanas from anon;
 
 -- ─── F (cont.). resolver_precio con ventana de campaña en fecha local AR ────
 create or replace function public.resolver_precio(
