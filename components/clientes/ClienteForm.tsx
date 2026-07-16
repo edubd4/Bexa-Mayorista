@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { useToast } from "@/components/ui/toast"
 import { createCliente, updateCliente } from "@/app/(dashboard)/clientes/actions"
 import { DOMINIO } from "@/lib/dominio"
@@ -42,6 +43,7 @@ const DEFAULTS: ClienteInput = {
 export function ClienteForm({ mode, clienteId, initial, listasPrecios = [] }: Props) {
   const router = useRouter()
   const toast = useToast()
+  const confirm = useConfirm()
   const [form, setForm] = useState<ClienteInput>({ ...DEFAULTS, ...initial })
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -55,6 +57,34 @@ export function ClienteForm({ mode, clienteId, initial, listasPrecios = [] }: Pr
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+
+    // Preview de confirmación en el alta (pedido del cliente): repasar los
+    // datos antes de crear. En edición no aplica.
+    if (mode === "create") {
+      const lista = listasPrecios.find((l) => l.id === form.lista_precio_id)
+      const resumen = [
+        ["Tipo", esMayorista ? "Mayorista" : "Minorista"],
+        ["Nombre", esMayorista ? form.razon_social : [form.nombre, form.apellido].filter(Boolean).join(" ")],
+        ["Documento", form.documento],
+        ["Teléfono", form.telefono],
+        ["WhatsApp", form.whatsapp],
+        ["Instagram", form.instagram],
+        ["Email", form.email],
+        ["Ciudad", [form.ciudad, form.provincia].filter(Boolean).join(", ")],
+        ["Lista de precios", lista ? lista.nombre : undefined],
+      ]
+        .filter(([, v]) => v && String(v).trim() !== "")
+        .map(([k, v]) => `${k}: ${v}`)
+        .join("\n")
+
+      const ok = await confirm({
+        title: "¿Crear este cliente?",
+        description: resumen || "Solo se cargó el nombre.",
+        confirmLabel: "Crear cliente",
+      })
+      if (!ok) return
+    }
+
     startTransition(async () => {
       const result =
         mode === "create"

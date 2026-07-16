@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { useToast } from "@/components/ui/toast"
 import { createProveedor, updateProveedor } from "@/app/(dashboard)/proveedores/actions"
 import { DOMINIO } from "@/lib/dominio"
@@ -35,6 +36,7 @@ const DEFAULTS: ProveedorInput = {
 export function ProveedorForm({ mode, proveedorId, initial }: Props) {
   const router = useRouter()
   const toast = useToast()
+  const confirm = useConfirm()
   const [form, setForm] = useState<ProveedorInput>({ ...DEFAULTS, ...initial })
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -46,6 +48,31 @@ export function ProveedorForm({ mode, proveedorId, initial }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+
+    // Preview de confirmación en el alta (pedido del cliente): repasar los
+    // datos cargados antes de crear. En edición no molesta — ya hay detalle.
+    if (mode === "create") {
+      const resumen = [
+        ["Nombre", form.nombre],
+        ["CUIT", form.cuit],
+        ["Contacto", form.contacto_nombre],
+        ["Teléfono", form.telefono],
+        ["WhatsApp", form.whatsapp],
+        ["Email", form.email],
+        ["Ciudad", [form.ciudad, form.provincia].filter(Boolean).join(", ")],
+        ["Cond. de pago", form.condiciones_pago],
+      ]
+        .filter(([, v]) => v && String(v).trim() !== "")
+        .map(([k, v]) => `${k}: ${v}`)
+        .join("\n")
+
+      const ok = await confirm({
+        title: "¿Crear este proveedor?",
+        description: resumen || "Solo se cargó el nombre.",
+        confirmLabel: "Crear proveedor",
+      })
+      if (!ok) return
+    }
 
     startTransition(async () => {
       const result =

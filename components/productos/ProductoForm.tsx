@@ -191,7 +191,10 @@ export function ProductoForm({
               value={form.costo ?? 0}
               onChange={(v) => update("costo", v ?? 0)}
             />
-            <p className="text-[11px] text-app-muted font-mono">Solo lo ve el admin.</p>
+            <p className="text-[11px] text-app-muted font-mono">
+              Solo lo ve el admin. Es un dato del catálogo — NO registra plata en
+              caja. Para comprar mercadería con plata usá Compras.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="precio_base">Precio base (minorista)</Label>

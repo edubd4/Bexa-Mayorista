@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { recibirCompra } from "@/app/(dashboard)/compras/actions"
+import { quickCreateProducto } from "@/app/(dashboard)/productos/actions"
 import { DOMINIO } from "@/lib/dominio"
 import { formatPesos } from "@/lib/utils"
 import type { CompraInput } from "@/lib/validators/compra"
@@ -52,14 +53,23 @@ export function CompraForm({ proveedores, productos }: Props) {
   const toast = useToast()
   const [proveedorId, setProveedorId] = useState(proveedores[0]?.id ?? "")
   const [numeroFactura, setNumeroFactura] = useState("")
+  const [fecha, setFecha] = useState("")   // vacío = hoy (lo resuelve el server)
   const [notas, setNotas] = useState("")
   const [lineas, setLineas] = useState<Linea[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
+  // Productos creados en línea (quick-create) se suman a los que vinieron del server
+  const [productosExtra, setProductosExtra] = useState<ProductoOption[]>([])
+  const [quickOpen, setQuickOpen] = useState(false)
+  const [quickNombre, setQuickNombre] = useState("")
+  const [quickCosto, setQuickCosto] = useState<number | null>(null)
+  const [quickCategoria, setQuickCategoria] = useState("")
+  const [quickPending, startQuickTransition] = useTransition()
+
   const productosOrdenados = useMemo(
-    () => [...productos].sort((a, b) => a.nombre.localeCompare(b.nombre)),
-    [productos],
+    () => [...productos, ...productosExtra].sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    [productos, productosExtra],
   )
   const productoById = useMemo(
     () => new Map(productosOrdenados.map((p) => [p.id, p])),
@@ -96,6 +106,46 @@ export function CompraForm({ proveedores, productos }: Props) {
     setLineas((prev) => prev.map((l) => (l.key === key ? { ...l, costo_unitario: v ?? 0 } : l)))
   }
 
+  // Quick-create: producto con info mínima (nombre + costo) que se agrega como
+  // línea de la compra al toque. Queda "incompleto" (sin precio de venta) hasta
+  // que el admin lo complete desde Productos.
+  function handleQuickCreate() {
+    const nombre = quickNombre.trim()
+    if (nombre.length < 2) {
+      toast.error("Poné un nombre para el producto.")
+      return
+    }
+    startQuickTransition(async () => {
+      const res = await quickCreateProducto({
+        nombre,
+        costo: quickCosto ?? 0,
+        categoria: quickCategoria.trim() || undefined,
+        proveedor_id: proveedorId || undefined,
+      })
+      if (!res.ok) {
+        toast.error(res.error)
+        return
+      }
+      const nuevo: ProductoOption = {
+        id: res.producto.id,
+        id_publico: res.producto.id_publico,
+        nombre: res.producto.nombre,
+        costo: res.producto.costo,
+        stock_actual: res.producto.stock_actual,
+      }
+      setProductosExtra((prev) => [...prev, nuevo])
+      setLineas((prev) => [
+        ...prev,
+        { key: nextKey(), producto_id: nuevo.id, cantidad: 1, costo_unitario: nuevo.costo },
+      ])
+      setQuickNombre("")
+      setQuickCosto(null)
+      setQuickCategoria("")
+      setQuickOpen(false)
+      toast.success(`${nuevo.id_publico} creado — completá el precio de venta después`)
+    })
+  }
+
   const totales = useMemo(() => {
     let total = 0
     for (const l of lineas) total += l.costo_unitario * l.cantidad
@@ -122,6 +172,7 @@ export function CompraForm({ proveedores, productos }: Props) {
       })),
       numero_factura: numeroFactura.trim() || undefined,
       notas: notas.trim() || undefined,
+      fecha: fecha || undefined,
     }
 
     startTransition(async () => {
@@ -161,6 +212,18 @@ export function CompraForm({ proveedores, productos }: Props) {
               placeholder="Ej. 0001-00012345"
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="fecha_compra">Fecha de la compra</Label>
+            <Input
+              id="fecha_compra"
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+            />
+            <p className="text-[11px] text-app-muted font-mono">
+              Dejalo vacío para usar hoy. Útil para cargar facturas viejas.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -172,11 +235,64 @@ export function CompraForm({ proveedores, productos }: Props) {
               El costo unitario acá actualiza el costo del producto en el catálogo (último pagado).
             </p>
           </div>
-          <Button type="button" onClick={agregarLinea} size="sm" variant="outline">
-            <Plus className="w-4 h-4" />
-            Agregar
-          </Button>
+          <div className="flex gap-2">
+            <Button type="button" onClick={() => setQuickOpen((v) => !v)} size="sm" variant="ghost">
+              <Plus className="w-4 h-4" />
+              Producto nuevo
+            </Button>
+            <Button type="button" onClick={agregarLinea} size="sm" variant="outline">
+              <Plus className="w-4 h-4" />
+              Agregar
+            </Button>
+          </div>
         </div>
+
+        {quickOpen && (
+          <div className="rounded-lg border border-app-accent/30 bg-app-accent/5 p-4 space-y-3">
+            <p className="text-xs text-app-secondary">
+              Carga rápida: nombre y costo alcanzan. El producto queda marcado{" "}
+              <span className="text-app-amber font-mono text-[11px]">incompleto</span> hasta
+              que le pongas precio de venta en Productos.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="quick_nombre">Nombre *</Label>
+                <Input
+                  id="quick_nombre"
+                  value={quickNombre}
+                  onChange={(e) => setQuickNombre(e.target.value)}
+                  placeholder="Ej. Ventilador 16'' turbo"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="quick_costo">Costo unitario</Label>
+                <MoneyInput
+                  id="quick_costo"
+                  decimals={2}
+                  value={quickCosto}
+                  onChange={setQuickCosto}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="quick_categoria">Categoría (opcional)</Label>
+                <Input
+                  id="quick_categoria"
+                  value={quickCategoria}
+                  onChange={(e) => setQuickCategoria(e.target.value)}
+                  placeholder="Ej. Climatización"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setQuickOpen(false)} disabled={quickPending}>
+                Cerrar
+              </Button>
+              <Button type="button" size="sm" onClick={handleQuickCreate} disabled={quickPending}>
+                {quickPending ? "Creando…" : "Crear y agregar a la compra"}
+              </Button>
+            </div>
+          </div>
+        )}
 
         <Table>
           <TableHeader>
