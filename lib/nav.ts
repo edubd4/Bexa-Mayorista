@@ -41,21 +41,26 @@ export type NavGroup = {
 // Configuración del sidebar. Labels de entidades SIEMPRE desde DOMINIO — nada
 // hardcodeado. Cada módulo cosechado agrega su item en el grupo que corresponda
 // (Operación / Comercial / Plata / Análisis), antes de "Sistema".
+// Alias reusables para roles compuestos — mantener consistencia con la matriz
+// de permisos: marketing NO puede vender/comprar/tocar plata, pero SÍ ve
+// clientes/productos/campañas/seguimiento.
+const OPERATIVO = [ROL.ADMIN, ROL.COLABORADOR] as const
+
 export const NAV: NavGroup[] = [
   {
     label: "Operación",
     items: [
       { label: "Panel", href: "/panel", iconKey: "LayoutDashboard" },
-      { label: DOMINIO.ventas.plural,  href: DOMINIO.ventas.ruta,  iconKey: "ClipboardList" },
-      { label: DOMINIO.compras.plural, href: DOMINIO.compras.ruta, iconKey: "Receipt", roles: [ROL.ADMIN] },
+      { label: DOMINIO.ventas.plural,  href: DOMINIO.ventas.ruta,  iconKey: "ClipboardList", roles: [...OPERATIVO] },
+      { label: DOMINIO.compras.plural, href: DOMINIO.compras.ruta, iconKey: "Receipt",        roles: [ROL.ADMIN] },
     ],
   },
   {
     label: "Maestros",
     items: [
-      { label: DOMINIO.clientes.plural,    href: DOMINIO.clientes.ruta,    iconKey: "Users"    },
-      { label: DOMINIO.proveedores.plural, href: DOMINIO.proveedores.ruta, iconKey: "Landmark" },
-      { label: DOMINIO.productos.plural,   href: DOMINIO.productos.ruta,   iconKey: "Package"  },
+      { label: DOMINIO.clientes.plural,    href: DOMINIO.clientes.ruta,    iconKey: "Users"                          },
+      { label: DOMINIO.proveedores.plural, href: DOMINIO.proveedores.ruta, iconKey: "Landmark", roles: [...OPERATIVO] },
+      { label: DOMINIO.productos.plural,   href: DOMINIO.productos.ruta,   iconKey: "Package"                        },
     ],
   },
   {
@@ -71,7 +76,7 @@ export const NAV: NavGroup[] = [
       { label: DOMINIO.gastos.plural, href: DOMINIO.gastos.ruta, iconKey: "Receipt",    roles: [ROL.ADMIN] },
       { label: "Finanzas",            href: "/finanzas",         iconKey: "Landmark",   roles: [ROL.ADMIN] },
       { label: "Contabilidad",        href: "/contabilidad",     iconKey: "Calculator", roles: [ROL.ADMIN] },
-      { label: "Comisiones",          href: "/comisiones",       iconKey: "BarChart3"                     },
+      { label: "Comisiones",          href: "/comisiones",       iconKey: "BarChart3",  roles: [...OPERATIVO] },
     ],
   },
   {

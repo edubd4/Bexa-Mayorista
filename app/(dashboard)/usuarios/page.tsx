@@ -12,7 +12,7 @@ type Profile = {
   id: string
   email: string
   nombre: string
-  rol: "admin" | "colaborador"
+  rol: "admin" | "colaborador" | "marketing"
   activo: boolean
   created_at: string
 }

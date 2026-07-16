@@ -86,7 +86,8 @@ export function UsuarioEditForm({ usuarioId, isSelf, initial }: Props) {
                 onChange={(e) => update("rol", e.target.value as UsuarioUpdateInput["rol"])}
                 disabled={isSelf}
               >
-                <option value="colaborador">Colaborador</option>
+                <option value="colaborador">Vendedor</option>
+                <option value="marketing">Marketing</option>
                 <option value="admin">Admin</option>
               </Select>
               {isSelf && (

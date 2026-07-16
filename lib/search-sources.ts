@@ -144,6 +144,21 @@ const buscarCompras: SearchSource = async (supabase, like) => {
   }))
 }
 
+// ─── Campañas (RLS: admin+colaborador+marketing) ────────────────────────────
+const buscarCampanas: SearchSource = async (supabase, like) => {
+  const { data } = await supabase
+    .from("v_campanas")
+    .select("id, id_publico, nombre, estado_efectivo")
+    .or(`id_publico.ilike.${like},nombre.ilike.${like}`)
+    .limit(5)
+  return (data ?? []).map((c) => ({
+    href: `${DOMINIO.campanas.ruta}/${c.id}`,
+    label: `${c.id_publico} · ${c.nombre}`,
+    sub: `${DOMINIO.campanas.singular} · ${c.estado_efectivo}`,
+    iconKey: "Megaphone" as const,
+  }))
+}
+
 // Los módulos cosechados agregan su fuente acá (clientes, ventas, ...).
 const SOURCES: SearchSource[] = [
   buscarCompras,
@@ -152,6 +167,7 @@ const SOURCES: SearchSource[] = [
   buscarClientes,
   buscarProveedores,
   buscarProductos,
+  buscarCampanas,
 ]
 
 export async function buscarGlobal(supabase: Supabase, q: string): Promise<SearchResult[]> {
