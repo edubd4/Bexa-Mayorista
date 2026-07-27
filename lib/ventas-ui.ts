@@ -32,6 +32,8 @@ export const ESTADO_ENTREGA_VARIANT: Record<EstadoEntrega, "green" | "amber" | "
 // Ej.: "lista+descuento_producto" → "Lista de precios · Descuento por producto"
 export function explicarOrigenPrecio(origen: string | null | undefined): string {
   if (!origen) return "Precio base"
+  // Tramo por cantidad (0022): pisa lista y descuentos, viene solo.
+  if (origen === "tramo_cantidad") return "Precio por cantidad"
   const [precio, descuento] = origen.split("+")
   const parts: string[] = []
   parts.push(precio === "lista" ? "Lista de precios" : "Precio base")

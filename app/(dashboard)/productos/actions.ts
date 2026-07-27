@@ -8,11 +8,15 @@ import { DOMINIO } from "@/lib/dominio"
 import { esAdmin } from "@/lib/permisos"
 import { logHistorial } from "@/lib/historial"
 import {
+  eliminarPrecioTramoSchema,
   movimientoStockSchema,
   movimientoStockVendedorSchema,
+  precioTramoSchema,
   productoSchema,
+  type EliminarPrecioTramoInput,
   type MovimientoStockInput,
   type MovimientoStockVendedorInput,
+  type PrecioTramoInput,
   type ProductoInput,
 } from "@/lib/validators/producto"
 import { signoDelta } from "@/lib/productos-ui"
@@ -212,6 +216,90 @@ export async function toggleProductoActivo(id: string): Promise<ActionResult> {
 
   revalidatePath(DOMINIO.productos.ruta)
   revalidatePath(`${DOMINIO.productos.ruta}/${id}`)
+  return { ok: true }
+}
+
+// ─── Precios por tramo de cantidad (0022) ──────────────────────────────────
+// Política de precios = admin, como listas y reglas de descuento. Guardar el
+// mismo cantidad_min actualiza el precio (upsert sobre la unique).
+export async function guardarPrecioTramo(input: PrecioTramoInput): Promise<ActionResult> {
+  const parsed = precioTramoSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
+  }
+
+  const guard = await requireAdmin()
+  if (!guard.ok) return { ok: false, error: guard.error }
+  const { supabase, user } = guard
+
+  const { data: producto } = await supabase
+    .from("productos_catalogo")
+    .select("id, id_publico")
+    .eq("id", parsed.data.producto_id)
+    .maybeSingle()
+  if (!producto) return { ok: false, error: "Producto no encontrado" }
+
+  const { error } = await supabase
+    .from("productos_precios_tramo")
+    .upsert(
+      {
+        producto_id:  parsed.data.producto_id,
+        cantidad_min: parsed.data.cantidad_min,
+        precio:       parsed.data.precio,
+        created_by:   user.id,
+        updated_by:   user.id,
+      },
+      { onConflict: "producto_id,cantidad_min" },
+    )
+  if (error) return { ok: false, error: error.message }
+
+  await logHistorial(supabase, {
+    tipo: TIPO_EVENTO.MODIFICACION,
+    descripcion: `Precio por cantidad ${producto.id_publico} · desde ${parsed.data.cantidad_min} u. → ${parsed.data.precio}`,
+    entidadTipo: "producto",
+    entidadId: producto.id_publico,
+    payload: { cantidad_min: parsed.data.cantidad_min, precio: parsed.data.precio },
+    userId: user.id,
+  })
+
+  revalidatePath(`${DOMINIO.productos.ruta}/${parsed.data.producto_id}`)
+  return { ok: true }
+}
+
+export async function eliminarPrecioTramo(input: EliminarPrecioTramoInput): Promise<ActionResult> {
+  const parsed = eliminarPrecioTramoSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
+  }
+
+  const guard = await requireAdmin()
+  if (!guard.ok) return { ok: false, error: guard.error }
+  const { supabase, user } = guard
+
+  const { data: tramo } = await supabase
+    .from("productos_precios_tramo")
+    .select("id, cantidad_min, precio, producto:producto_id ( id_publico )")
+    .eq("id", parsed.data.tramo_id)
+    .maybeSingle()
+  if (!tramo) return { ok: false, error: "Tramo no encontrado" }
+
+  const { error } = await supabase
+    .from("productos_precios_tramo")
+    .delete()
+    .eq("id", parsed.data.tramo_id)
+  if (error) return { ok: false, error: error.message }
+
+  const idPublico = (tramo as unknown as { producto: { id_publico: string } | null }).producto?.id_publico ?? ""
+  await logHistorial(supabase, {
+    tipo: TIPO_EVENTO.MODIFICACION,
+    descripcion: `Precio por cantidad ${idPublico} · tramo desde ${tramo.cantidad_min} u. eliminado`,
+    entidadTipo: "producto",
+    entidadId: idPublico,
+    payload: { cantidad_min: tramo.cantidad_min, precio: tramo.precio },
+    userId: user.id,
+  })
+
+  revalidatePath(`${DOMINIO.productos.ruta}/${parsed.data.producto_id}`)
   return { ok: true }
 }
 

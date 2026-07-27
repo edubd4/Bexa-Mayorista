@@ -346,6 +346,13 @@ export const SECCIONES: SeccionManual[] = [
       {
         tipo: "aviso",
         nivel: "info",
+        titulo: "Precios por cantidad: el tramo manda",
+        texto:
+          "Un producto puede tener precios por tramo: de 1 a 9 unidades un precio, de 10 en adelante otro. Se cargan en la ficha del producto (sección 'Precios por cantidad'). Ojo con la regla: si un tramo aplica a la cantidad vendida, ESE es el precio — no se le suma la lista del cliente ni los descuentos. Un solo beneficio por cantidad, así el precio siempre se puede explicar.",
+      },
+      {
+        tipo: "aviso",
+        nivel: "info",
         titulo: "Carga rápida desde una compra",
         texto:
           "Si estás cargando una compra y aparece un producto que todavía no existe, podés crearlo ahí mismo con nombre y costo. Queda con precio de venta en 0 y marcado como incompleto: acordate de volver a Productos y ponerle el precio antes de que un vendedor intente venderlo.",
