@@ -244,8 +244,15 @@ export async function actualizarPublicacion(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
-  // campana_id no se reasigna por esta vía: una publicación no cambia de campaña.
-  const { campana_id: _ignorado, ...campos } = parsed.data
+
+  // Lista blanca explícita en vez de "todo menos campana_id": si mañana el
+  // schema suma un campo, no se cuela solo en el update. `campana_id` queda
+  // afuera a propósito — una publicación no se muda de campaña por esta vía.
+  const campos: Record<string, unknown> = {}
+  const EDITABLES = ["canal_id", "titulo", "cuerpo", "fecha_publicacion", "estado"] as const
+  for (const k of EDITABLES) {
+    if (parsed.data[k] !== undefined) campos[k] = parsed.data[k]
+  }
 
   const guard = await requireGestionCampanas()
   if (!guard.ok) return { ok: false, error: guard.error }

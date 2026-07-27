@@ -180,7 +180,10 @@ const buscarCampanas: SearchSource = async (supabase, like) => {
 // El filtrado por rol se hace en la propia página de la sección; acá devolvemos
 // las secciones cuyo título o resumen matchea, para que el empleado llegue a la
 // respuesta desde el mismo Ctrl+K con el que busca todo lo demás.
-const buscarManual: SearchSource = async (_supabase, like, _ctx) => {
+// No recibe `ctx`: el manual no depende del rol acá — cada sección filtra por
+// rol en su propia página. TS permite declarar menos parámetros de los que la
+// firma ofrece.
+const buscarManual: SearchSource = async (_supabase, like) => {
   const q = like.replaceAll("%", "").toLowerCase()
   if (q.length < 2) return []
   return SECCIONES.filter(
