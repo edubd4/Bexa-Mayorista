@@ -12,6 +12,7 @@ import {
 import { createServerClient } from "@/lib/supabase/server"
 import { Badge } from "@/components/ui/badge"
 import { AccionesRapidas } from "@/components/panel/AccionesRapidas"
+import { ResumenSemanalTareas } from "@/components/tareas/ResumenSemanalTareas"
 import { formatPesos } from "@/lib/utils"
 import { ahoraArgentina, toISODate, tsArgentina } from "@/lib/fechas"
 import { ROL } from "@/lib/constants"
@@ -153,6 +154,10 @@ async function PanelAdmin({ nombre }: { nombre: string }) {
           <KPICompact label="Por cobrar"    value={formatPesos(kpiMes.por_cobrar)}  tone="amber" href="/finanzas" />
           <KPICompact label="Ticket prom."  value={formatPesos(kpiMes.ticket_prom)} tone="accent" />
         </section>
+
+        {/* Cumplimiento de tareas del equipo (movido de /tareas: acá es gestión). */}
+        <ResumenSemanalTareas esAdmin />
+
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <section className="rounded-xl border border-app-line-soft bg-app-card p-5 space-y-3">
@@ -318,6 +323,9 @@ async function PanelVendedor({ nombre, userId }: { nombre: string; userId: strin
           <KPI icon={<TrendingUp className="w-4 h-4" />} label="Vendido mes"    value={formatPesos(kpiMes.facturado)}    sub={`ticket prom. ${formatPesos(kpiMes.ticket_prom)}`} href={DOMINIO.ventas.ruta} tone="green" />
         </section>
 
+        {/* Sus tareas de la semana (la RLS ya limita a las propias). */}
+        <ResumenSemanalTareas esAdmin={false} />
+
         <section className="rounded-xl border border-app-line-soft bg-app-card p-5">
           <div className="flex items-center justify-between">
             <div>
@@ -422,6 +430,9 @@ async function PanelMarketing({ nombre }: { nombre: string }) {
         </header>
 
         <AccionesRapidas rol={ROL.MARKETING} />
+
+        {/* Sus tareas de la semana (la RLS ya limita a las propias). */}
+        <ResumenSemanalTareas esAdmin={false} />
 
         <section className="rounded-xl border border-app-line-soft bg-app-card p-5 space-y-3">
           <div className="flex items-center justify-between">

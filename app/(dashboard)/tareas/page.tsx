@@ -124,14 +124,7 @@ export default async function TareasPage({
     fecha_limite, manual_url, activo, asignado:asignado_a ( nombre )
   `
 
-  // Lunes de la semana en curso (semana operativa Lun-Dom) para el resumen.
-  const ahoraAR = ahoraArgentina()
-  const dowHoy = ahoraAR.getDay()
-  const lunes = new Date(ahoraAR)
-  lunes.setDate(ahoraAR.getDate() - ((dowHoy + 6) % 7))
-  const inicioSemana = toISODate(lunes)
-
-  const [catalogoRes, hoyRes, atrasadasRes, historialRes, semanaRes, usuariosRes, noLeidosRes] = await Promise.all([
+  const [catalogoRes, hoyRes, atrasadasRes, historialRes, usuariosRes, noLeidosRes] = await Promise.all([
     // La RLS filtra: el empleado recibe SOLO sus tareas; el admin, todas.
     supabase.from("tareas").select(tareaCols).eq("activo", true)
       .order("hora_sugerida", { nullsFirst: false }),
@@ -158,12 +151,6 @@ export default async function TareasPage({
           .order("updated_at", { ascending: false })
           .limit(20)
       : Promise.resolve({ data: [] }),
-    // Resumen semanal (Lun-Dom): el estado general que pidió el cliente.
-    supabase
-      .from("tarea_ocurrencias")
-      .select("id, tarea_id, fecha, estado")
-      .gte("fecha", inicioSemana)
-      .lte("fecha", hoy),
     esAdmin
       ? supabase.from("profiles").select("id, nombre").eq("activo", true).order("nombre")
       : Promise.resolve({ data: [] }),
@@ -175,7 +162,6 @@ export default async function TareasPage({
   const deHoy = (hoyRes.data ?? []) as unknown as OcurrenciaRow[]
   const atrasadas = (atrasadasRes.data ?? []) as unknown as OcurrenciaRow[]
   const historial = (historialRes.data ?? []) as unknown as HistorialRow[]
-  const semana = (semanaRes.data ?? []) as unknown as Pick<OcurrenciaRow, "id" | "tarea_id" | "fecha" | "estado">[]
   const usuarios = (usuariosRes.data ?? []) as { id: string; nombre: string }[]
   const noLeidosPorTarea = new Map(
     ((noLeidosRes.data ?? []) as { tarea_id: string; no_leidos: number }[])
@@ -239,37 +225,6 @@ export default async function TareasPage({
   const enProcesoHoy = deHoy.filter((o) => o.estado === "EN_PROCESO").length
   const totalAtrasadas = atrasadas.length
   const ent = DOMINIO.tareas
-
-  // ─── Resumen semanal (Lun → hoy) ──────────────────────────────────────────
-  const DIA_CORTO = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]
-  const porFecha = new Map<string, { total: number; hechas: number }>()
-  const porResponsable = new Map<string, { total: number; hechas: number; atrasadas: number }>()
-  for (const o of semana) {
-    const dia = porFecha.get(o.fecha) ?? { total: 0, hechas: 0 }
-    dia.total += 1
-    if (o.estado === "FINALIZADA") dia.hechas += 1
-    porFecha.set(o.fecha, dia)
-
-    const t = tareaPorId.get(o.tarea_id)
-    if (t) {
-      const key = t.asignado?.nombre ?? "Sin asignar"
-      const r = porResponsable.get(key) ?? { total: 0, hechas: 0, atrasadas: 0 }
-      r.total += 1
-      if (o.estado === "FINALIZADA") r.hechas += 1
-      else if (o.fecha < hoy) r.atrasadas += 1
-      porResponsable.set(key, r)
-    }
-  }
-  const diasSemana: { fecha: string; label: string; futuro: boolean }[] = []
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(lunes)
-    d.setDate(lunes.getDate() + i)
-    const fecha = toISODate(d)
-    diasSemana.push({ fecha, label: `${DIA_CORTO[d.getDay()]} ${d.getDate()}`, futuro: fecha > hoy })
-  }
-  const semanaTotal = semana.length
-  const semanaHechas = semana.filter((o) => o.estado === "FINALIZADA").length
-  const semanaAtrasadas = semana.filter((o) => o.estado !== "FINALIZADA" && o.fecha < hoy).length
 
   return (
     <div className="app-circuit min-h-[calc(100vh-4rem)] px-6 md:px-10 py-8">
@@ -348,83 +303,6 @@ export default async function TareasPage({
             activa={fEstado === "atrasadas"}
           />
         </section>
-
-        {/* ─── Resumen de la semana ─────────────────────────────────────── */}
-        <details className="group rounded-xl border border-app-line-soft bg-app-card overflow-hidden">
-          <summary className="flex items-center justify-between gap-4 px-5 py-3.5 cursor-pointer select-none hover:bg-app-surface-mid/30 transition-colors list-none [&::-webkit-details-marker]:hidden">
-            <div className="flex items-center gap-3">
-              <ChevronDown className="w-4 h-4 text-app-muted transition-transform group-open:rotate-0 -rotate-90" />
-              <h2 className="font-display font-semibold">Resumen de la semana</h2>
-            </div>
-            <span className="font-mono text-[11px] text-app-secondary">
-              {semanaHechas}/{semanaTotal} finalizadas
-              {semanaAtrasadas > 0 && (
-                <span className="text-app-red"> · {semanaAtrasadas} atrasadas</span>
-              )}
-            </span>
-          </summary>
-          <div className="border-t border-app-line-soft p-5 space-y-5">
-            {/* Un cuadrito por día: cuánto se hizo de lo que tocaba. */}
-            <div className="grid grid-cols-7 gap-2">
-              {diasSemana.map((d) => {
-                const stats = porFecha.get(d.fecha)
-                const pct = stats && stats.total > 0 ? stats.hechas / stats.total : null
-                const esHoy = d.fecha === hoy
-                return (
-                  <div
-                    key={d.fecha}
-                    className={`rounded-lg border px-2 py-2 text-center ${
-                      esHoy ? "border-app-accent/50 bg-app-accent/5" : "border-app-line-soft"
-                    } ${d.futuro ? "opacity-40" : ""}`}
-                  >
-                    <p className="font-mono text-[10px] text-app-muted uppercase">{d.label}</p>
-                    <p className="font-display text-sm font-semibold mt-0.5">
-                      {d.futuro ? "—" : stats ? `${stats.hechas}/${stats.total}` : "—"}
-                    </p>
-                    <div className="mt-1.5 h-1 rounded-full bg-app-surface-mid overflow-hidden">
-                      {pct !== null && !d.futuro && (
-                        <div
-                          className={`h-full rounded-full ${
-                            pct === 1 ? "bg-app-green" : pct >= 0.5 ? "bg-app-accent" : "bg-app-amber"
-                          }`}
-                          style={{ width: `${Math.round(pct * 100)}%` }}
-                        />
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Cumplimiento por persona (admin): quién viene bien y quién no. */}
-            {esAdmin && porResponsable.size > 0 && (
-              <div className="space-y-2">
-                {Array.from(porResponsable.entries())
-                  .sort((a, b) => b[1].total - a[1].total)
-                  .map(([nombre, r]) => {
-                    const pct = r.total > 0 ? r.hechas / r.total : 0
-                    return (
-                      <div key={nombre} className="flex items-center gap-3">
-                        <span className="w-36 truncate text-sm text-app-text shrink-0">{nombre}</span>
-                        <div className="flex-1 h-2 rounded-full bg-app-surface-mid overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${
-                              pct === 1 ? "bg-app-green" : pct >= 0.5 ? "bg-app-accent" : "bg-app-amber"
-                            }`}
-                            style={{ width: `${Math.round(pct * 100)}%` }}
-                          />
-                        </div>
-                        <span className="font-mono text-[11px] text-app-secondary w-24 text-right shrink-0">
-                          {r.hechas}/{r.total}
-                          {r.atrasadas > 0 && <span className="text-app-red"> · {r.atrasadas} atr.</span>}
-                        </span>
-                      </div>
-                    )
-                  })}
-              </div>
-            )}
-          </div>
-        </details>
 
         {/* ─── Filtros (admin) ──────────────────────────────────────────── */}
         {esAdmin && (
