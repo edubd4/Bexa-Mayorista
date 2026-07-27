@@ -23,6 +23,7 @@ import {
   Megaphone,
   UserRoundSearch,
   GraduationCap,
+  ListChecks,
   type LucideIcon,
 } from "lucide-react"
 import type { IconKey } from "@/lib/nav"
@@ -47,4 +48,5 @@ export const ICONS: Record<IconKey, LucideIcon> = {
   Megaphone,
   UserRoundSearch,
   GraduationCap,
+  ListChecks,
 }
