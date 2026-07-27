@@ -282,6 +282,65 @@ export const SECCIONES: SeccionManual[] = [
   },
 
   // ══════════════════════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════════════════
+  {
+    slug: "tareas",
+    titulo: "Tareas del equipo",
+    resumen: "Tus tareas del día: qué te toca, cómo marcarlas y qué queda registrado.",
+    categoria: "Tutoriales",
+    minutos: 4,
+    bloques: [
+      {
+        tipo: "texto",
+        parrafos: [
+          "Tareas es el sistema operativo del equipo: cada uno entra y ve qué le toca hoy, con su horario sugerido y su prioridad. Las diarias aparecen todos los días, las semanales su día, las mensuales su fecha — solas, no hay que cargarlas de nuevo.",
+        ],
+      },
+      {
+        tipo: "pasos",
+        titulo: "El circuito de una tarea",
+        pasos: [
+          {
+            titulo: "1 · Abrí Tareas al arrancar el día",
+            detalle:
+              "Ahí está tu lista de hoy, ordenada por horario. Si una tarea tiene manual (el ícono de link), leelo antes de hacerla la primera vez.",
+            ruta: "/tareas",
+          },
+          {
+            titulo: "2 · Marcá 'En proceso' cuando la agarrás",
+            detalle:
+              "Un toque en el botón. El sistema guarda la hora real en que empezaste — no hace falta anotar nada.",
+          },
+          {
+            titulo: "3 · Marcá 'Finalizada' cuando la terminás",
+            detalle:
+              "En el momento, no al final del día. La hora de cierre queda registrada y el admin ve el avance del equipo sin preguntar.",
+          },
+          {
+            titulo: "4 · Las 'cuando corresponda' se registran al hacerlas",
+            detalle:
+              "Tareas como 'Enviar lista de precios' no tienen día fijo. Cuando la hacés, tocá 'La hago hoy' y marcala como cualquier otra.",
+          },
+        ],
+      },
+      {
+        tipo: "aviso",
+        nivel: "ojo",
+        titulo: "La hora la pone el sistema, no vos",
+        texto:
+          "Cada cambio de estado queda sellado con la hora real del momento en que lo marcaste. Marcar todo junto a las 20:00 se nota en la auditoría. Marcá en el momento y listo — es un toque.",
+      },
+      {
+        tipo: "aviso",
+        nivel: "info",
+        titulo: "Para el admin",
+        texto:
+          "Vos ves el tablero completo agrupado por persona, gestionás el catálogo (crear, asignar responsable, frecuencia, prioridad, link al manual de cada tarea) y tenés la Auditoría con los horarios reales de inicio y fin de cada ejecución. Una tarea que ya no aplica se desactiva — el historial queda.",
+      },
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
   {
     slug: "cargar-productos",
     titulo: `Cargar ${D.productos.plural.toLowerCase()}`,

@@ -140,6 +140,14 @@ export const DOMINIO = {
     icono: "UserRoundSearch",
     genero: "m",
   },
+  tareas: {
+    singular: "Tarea",
+    plural: "Tareas",
+    ruta: "/tareas",
+    prefijoId: "TAR",
+    icono: "ListChecks",
+    genero: "f",
+  },
   campanas: {
     singular: "Campaña",
     plural: "Campañas",

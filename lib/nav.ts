@@ -25,6 +25,7 @@ export type IconKey =
   | "Megaphone"
   | "UserRoundSearch"
   | "GraduationCap"
+  | "ListChecks"
 
 export type NavItem = {
   label: string
@@ -52,6 +53,9 @@ export const NAV: NavGroup[] = [
     label: "Operación",
     items: [
       { label: "Panel", href: "/panel", iconKey: "LayoutDashboard" },
+      // Sin `roles`: el sistema operativo del equipo es para TODOS — cada uno
+      // ve sus tareas; el admin ve el tablero completo (0025).
+      { label: DOMINIO.tareas.plural, href: DOMINIO.tareas.ruta, iconKey: "ListChecks" },
       { label: DOMINIO.ventas.plural,  href: DOMINIO.ventas.ruta,  iconKey: "ClipboardList", roles: [...OPERATIVO] },
       { label: DOMINIO.compras.plural, href: DOMINIO.compras.ruta, iconKey: "Receipt",        roles: [ROL.ADMIN] },
     ],
