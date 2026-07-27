@@ -243,6 +243,41 @@ export async function createRegla(input: ReglaDescuentoInput): Promise<ActionRes
   return { ok: true }
 }
 
+// Borrado de regla (hueco CRUD 2026-07-27: solo se podía desactivar y las
+// inactivas se acumulaban para siempre). Es seguro: la venta guarda snapshot
+// del descuento aplicado, borrar la regla no toca el histórico.
+export async function removeRegla(id: string, listaId: string | null): Promise<ActionResult> {
+  const guard = await requireAdmin()
+  if (!guard.ok) return { ok: false, error: guard.error }
+  const { supabase, user } = guard
+
+  const { data: current } = await supabase
+    .from("reglas_descuento")
+    .select("id_publico, scope, cantidad_min, descuento_pct")
+    .eq("id", id)
+    .maybeSingle()
+  if (!current) return { ok: false, error: "Regla no encontrada" }
+
+  const { error } = await supabase
+    .from("reglas_descuento")
+    .delete()
+    .eq("id", id)
+  if (error) return { ok: false, error: error.message }
+
+  await logHistorial(supabase, {
+    tipo: TIPO_EVENTO.BAJA,
+    descripcion: `Regla ${current.id_publico} eliminada · ${current.scope} · ${current.cantidad_min}+ → ${current.descuento_pct}%`,
+    entidadTipo: "regla_descuento",
+    entidadId: current.id_publico,
+    payload: { scope: current.scope, cantidad_min: current.cantidad_min, descuento_pct: current.descuento_pct },
+    userId: user.id,
+  })
+
+  if (listaId) revalidatePath(`${RUTA}/${listaId}`)
+  revalidatePath(RUTA)
+  return { ok: true }
+}
+
 export async function toggleReglaActivo(id: string, listaId: string | null): Promise<ActionResult> {
   const guard = await requireAdmin()
   if (!guard.ok) return { ok: false, error: guard.error }

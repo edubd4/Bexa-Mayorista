@@ -2,7 +2,9 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Plus } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AnularGastoButton } from "@/components/gastos/AnularGastoButton"
 import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { LinkRow } from "@/components/ui/link-row"
 import {
@@ -27,6 +29,7 @@ type GastoRow = {
   descripcion: string
   fecha: string
   metodo_pago: MetodoPago
+  anulado_at: string | null
   categoria: { nombre: string } | null
 }
 
@@ -44,12 +47,13 @@ export default async function GastosPage() {
 
   const { data } = await supabase
     .from("gastos")
-    .select("id, id_publico, monto, descripcion, fecha, metodo_pago, categoria:categoria_id ( nombre )")
+    .select("id, id_publico, monto, descripcion, fecha, metodo_pago, anulado_at, categoria:categoria_id ( nombre )")
     .order("fecha", { ascending: false })
     .limit(200)
 
   const rows = (data ?? []) as unknown as GastoRow[]
-  const total = rows.reduce((sum, g) => sum + Number(g.monto), 0)
+  // Los anulados se muestran (tachados) pero no suman: su plata ya volvió a caja.
+  const total = rows.reduce((sum, g) => (g.anulado_at ? sum : sum + Number(g.monto)), 0)
   const ent = DOMINIO.gastos
 
   return (
@@ -103,20 +107,39 @@ export default async function GastosPage() {
                 </TableEmpty>
               ) : (
                 rows.map((g) => (
-                  <LinkRow key={g.id} href={`${DOMINIO.caja.ruta}?q=${g.id_publico}`}>
+                  <LinkRow
+                    key={g.id}
+                    href={`${DOMINIO.caja.ruta}?q=${g.id_publico}`}
+                    className={g.anulado_at ? "opacity-50" : undefined}
+                  >
                     <TableCell className="font-mono text-app-accent text-xs">{g.id_publico}</TableCell>
                     <TableCell className="hidden md:table-cell text-sm text-app-secondary">
                       {formatFecha(g.fecha)}
                     </TableCell>
-                    <TableCell className="font-medium">{g.descripcion}</TableCell>
+                    <TableCell className={`font-medium ${g.anulado_at ? "line-through" : ""}`}>
+                      {g.descripcion}
+                    </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm text-app-secondary">
                       {g.categoria?.nombre ?? "—"}
                     </TableCell>
                     <TableCell className="hidden md:table-cell text-sm text-app-secondary">
                       {METODO_PAGO_LABEL[g.metodo_pago]}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-sm text-app-red">
-                      −{formatPesos(Number(g.monto))}
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span className={`font-mono text-sm ${g.anulado_at ? "text-app-muted line-through" : "text-app-red"}`}>
+                          −{formatPesos(Number(g.monto))}
+                        </span>
+                        {g.anulado_at ? (
+                          <Badge variant="gray">Anulado</Badge>
+                        ) : (
+                          <AnularGastoButton
+                            gastoId={g.id}
+                            idPublico={g.id_publico}
+                            monto={Number(g.monto)}
+                          />
+                        )}
+                      </div>
                     </TableCell>
                   </LinkRow>
                 ))

@@ -274,9 +274,9 @@ export const SECCIONES: SeccionManual[] = [
       {
         tipo: "aviso",
         nivel: "cuidado",
-        titulo: "Caja y gastos no se borran",
+        titulo: "Caja y gastos no se borran — los gastos se ANULAN",
         texto:
-          "Los movimientos de caja y los gastos son inmutables por diseño: no se editan ni se eliminan. Si cargaste uno mal, se corrige con un movimiento contrario que lo compense, dejando la explicación escrita. Así la contabilidad siempre se puede auditar.",
+          "Los movimientos de caja y los gastos son inmutables por diseño: no se editan ni se eliminan. Un gasto mal cargado se ANULA desde la tabla de Gastos (botón Anular, con motivo): la plata vuelve a la caja con un ajuste y el gasto queda marcado, sin borrar nada. Si el gasto era real pero estaba mal cargado, registralo de nuevo con los datos correctos. Así la contabilidad siempre se puede auditar.",
       },
     ],
   },
