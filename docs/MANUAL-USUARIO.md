@@ -3,6 +3,11 @@
 Sistema de gestión de BEXA Import.
 Última actualización: 2026-07-16.
 
+> ⚠️ **Este archivo ya no es la fuente de verdad.**
+> El manual que leen los empleados vive **dentro del sistema**, en `/manual`, y su
+> contenido está en `lib/manual/contenido.ts`. Editá ahí — este `.md` queda como
+> referencia histórica y para lectura offline.
+
 ---
 
 ## Índice

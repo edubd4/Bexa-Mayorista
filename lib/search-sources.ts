@@ -1,6 +1,7 @@
 import type { createServerClient } from "@/lib/supabase/server"
 import type { IconKey } from "@/lib/nav"
 import { DOMINIO } from "@/lib/dominio"
+import { SECCIONES } from "@/lib/manual/contenido"
 
 // ============================================================================
 // Registry de fuentes de búsqueda global (server-side, consumido por /api/search).
@@ -159,8 +160,28 @@ const buscarCampanas: SearchSource = async (supabase, like) => {
   }))
 }
 
+// ─── Manual de usuario (contenido estático, sin DB) ──────────────────────────
+// El filtrado por rol se hace en la propia página de la sección; acá devolvemos
+// las secciones cuyo título o resumen matchea, para que el empleado llegue a la
+// respuesta desde el mismo Ctrl+K con el que busca todo lo demás.
+const buscarManual: SearchSource = async (_supabase, like) => {
+  const q = like.replaceAll("%", "").toLowerCase()
+  if (q.length < 2) return []
+  return SECCIONES.filter(
+    (s) => s.titulo.toLowerCase().includes(q) || s.resumen.toLowerCase().includes(q),
+  )
+    .slice(0, 4)
+    .map((s) => ({
+      href: `/manual/${s.slug}`,
+      label: s.titulo,
+      sub: `Manual · ${s.categoria} · ${s.minutos} min`,
+      iconKey: "GraduationCap" as const,
+    }))
+}
+
 // Los módulos cosechados agregan su fuente acá (clientes, ventas, ...).
 const SOURCES: SearchSource[] = [
+  buscarManual,
   buscarCompras,
   buscarVentas,
   buscarUsuarios,
