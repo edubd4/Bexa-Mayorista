@@ -64,6 +64,13 @@ export const tareaSchema = z
   })
 export type TareaInput = z.infer<typeof tareaSchema>
 
+// ─── Comentarios de tarea (0026) ────────────────────────────────────────────
+export const comentarioTareaSchema = z.object({
+  tarea_id: zUuid(),
+  texto: z.string().trim().min(1, "Escribí el comentario").max(1000),
+})
+export type ComentarioTareaInput = z.infer<typeof comentarioTareaSchema>
+
 // ─── Cambio de estado de una ocurrencia ─────────────────────────────────────
 export const cambiarEstadoOcurrenciaSchema = z.object({
   ocurrencia_id: zUuid(),

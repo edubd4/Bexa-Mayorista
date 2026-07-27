@@ -333,9 +333,16 @@ export const SECCIONES: SeccionManual[] = [
       {
         tipo: "aviso",
         nivel: "info",
+        titulo: "La conversación de cada tarea vive en la tarea",
+        texto:
+          "El globito de la fila abre los comentarios: dudas, avisos, 'faltó tal cosa' — todo queda escrito ahí, con quién lo dijo, a qué hora y quién lo leyó (✓✓). Si tenés mensajes sin leer, el globito muestra el número y arriba de la pantalla te avisa. No hace falta escribirse por WhatsApp por cosas del trabajo: dejalo en la tarea, que mañana también sirve.",
+      },
+      {
+        tipo: "aviso",
+        nivel: "info",
         titulo: "Para el admin",
         texto:
-          "Vos ves el tablero completo agrupado por persona, gestionás el catálogo (crear, asignar responsable, frecuencia, prioridad, link al manual de cada tarea) y tenés la Auditoría con los horarios reales de inicio y fin de cada ejecución. Una tarea que ya no aplica se desactiva — el historial queda.",
+          "Vos ves el día completo del equipo agrupado por área, con las cards de arriba como filtros (tocá 'Atrasadas' y la tabla muestra solo eso). Desde la misma fila asignás el responsable y cambiás la frecuencia, sin entrar a la ficha. El 'Resumen de la semana' te muestra el cumplimiento por día y por persona. Y la Auditoría guarda los horarios reales de inicio y fin de cada ejecución. Una tarea que ya no aplica se desactiva — el historial queda.",
       },
     ],
   },
