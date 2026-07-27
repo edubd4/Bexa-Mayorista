@@ -61,7 +61,10 @@ export default async function VentasPage({
 
   const esAdmin = profile.rol === ROL.ADMIN
 
-  // RLS filtra: vendedor ve solo las suyas.
+  // El vendedor ve SOLO sus ventas. Se filtra en dos lugares a propósito:
+  // acá (explícito) y en la RLS de `ventas`, que la vista respeta desde la
+  // 0016. Defensa en profundidad — si mañana alguien afloja una policy, esta
+  // pantalla sigue sin filtrar de más.
   let query = supabase
     .from("v_ventas_lista")
     .select(`
@@ -73,6 +76,8 @@ export default async function VentasPage({
     `)
     .order("fecha", { ascending: false })
     .limit(200)
+
+  if (!esAdmin) query = query.eq("vendedor_id", user.id)
 
   if (searchParams.cobro && ["PENDIENTE", "PARCIAL", "COBRADA", "CANCELADA"].includes(searchParams.cobro)) {
     query = query.eq("estado_cobro", searchParams.cobro)

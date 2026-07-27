@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase/server"
 import { buscarGlobal } from "@/lib/search-sources"
+import { ROL } from "@/lib/constants"
 
 // GET /api/search?q=texto
 // Busca en las fuentes registradas en lib/search-sources.ts (hasta 5 por tipo).
-// RLS filtra: cada rol ve solo lo que sus policies permiten.
+// La RLS filtra por rol, y además le pasamos el contexto del usuario a las
+// fuentes para que filtren explícitamente lo que es de alcance restringido
+// (ventas). Ver el encabezado de lib/search-sources.ts.
 export async function GET(req: Request) {
   const supabase = await createServerClient()
 
@@ -12,6 +15,15 @@ export async function GET(req: Request) {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) {
+    return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 })
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("rol, activo")
+    .eq("id", user.id)
+    .single()
+  if (!profile?.activo) {
     return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 })
   }
 
@@ -23,7 +35,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, data: { resultados: [] } })
   }
 
-  const resultados = await buscarGlobal(supabase, q)
+  const resultados = await buscarGlobal(supabase, q, {
+    userId: user.id,
+    esAdmin: profile.rol === ROL.ADMIN,
+  })
 
   return NextResponse.json({ ok: true, data: { resultados } })
 }

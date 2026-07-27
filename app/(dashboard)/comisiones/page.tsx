@@ -7,7 +7,9 @@ import { ROL } from "@/lib/constants"
 import { formatFecha, formatPesos } from "@/lib/utils"
 
 // Liquidación semanal — decisión cliente 2026-07-13.
-// Vendedor ve solo lo suyo (RLS de comisiones). Admin ve todo.
+// El vendedor ve SOLO su liquidación; el admin ve la de todos. Se filtra en dos
+// lugares a propósito: acá (explícito) y en la RLS de `comisiones`, que la
+// vista respeta desde la 0016. Defensa en profundidad.
 export default async function ComisionesPage() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -17,11 +19,14 @@ export default async function ComisionesPage() {
   if (profile.rol === ROL.MARKETING) redirect("/panel")
   const esAdmin = profile.rol === ROL.ADMIN
 
+  let queryComisiones = supabase.from("v_comisiones_semana")
+    .select("vendedor_id, semana_inicio, ventas_count, base, total, vendedor:vendedor_id ( nombre )")
+    .order("semana_inicio", { ascending: false })
+    .limit(200)
+  if (!esAdmin) queryComisiones = queryComisiones.eq("vendedor_id", user.id)
+
   const [{ data: semanas }, { data: vendedoresRows }] = await Promise.all([
-    supabase.from("v_comisiones_semana")
-      .select("vendedor_id, semana_inicio, ventas_count, base, total, vendedor:vendedor_id ( nombre )")
-      .order("semana_inicio", { ascending: false })
-      .limit(200),
+    queryComisiones,
     esAdmin
       ? supabase.from("profiles").select("id, nombre, comision_pct").eq("activo", true).order("nombre")
       : Promise.resolve({ data: [] as { id: string; nombre: string; comision_pct: number | null }[] }),
