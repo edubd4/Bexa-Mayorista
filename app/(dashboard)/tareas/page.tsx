@@ -15,7 +15,10 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { EstadoTareaSelect } from "@/components/tareas/EstadoTareaSelect"
+import { FrecuenciaSelect } from "@/components/tareas/FrecuenciaSelect"
 import { RegistrarEventualButton } from "@/components/tareas/RegistrarEventualButton"
+import { ResponsableSelect } from "@/components/tareas/ResponsableSelect"
+import { TareaComentariosDialog } from "@/components/tareas/TareaComentariosDialog"
 import { ROL } from "@/lib/constants"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
 import { ahoraArgentina, toISODate } from "@/lib/fechas"
@@ -96,7 +99,7 @@ function horaCorta(ts: string | null): string {
 export default async function TareasPage({
   searchParams,
 }: {
-  searchParams: { area?: string; resp?: string }
+  searchParams: { area?: string; resp?: string; f?: string }
 }) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -121,7 +124,14 @@ export default async function TareasPage({
     fecha_limite, manual_url, activo, asignado:asignado_a ( nombre )
   `
 
-  const [catalogoRes, hoyRes, atrasadasRes, historialRes] = await Promise.all([
+  // Lunes de la semana en curso (semana operativa Lun-Dom) para el resumen.
+  const ahoraAR = ahoraArgentina()
+  const dowHoy = ahoraAR.getDay()
+  const lunes = new Date(ahoraAR)
+  lunes.setDate(ahoraAR.getDate() - ((dowHoy + 6) % 7))
+  const inicioSemana = toISODate(lunes)
+
+  const [catalogoRes, hoyRes, atrasadasRes, historialRes, semanaRes, usuariosRes, noLeidosRes] = await Promise.all([
     // La RLS filtra: el empleado recibe SOLO sus tareas; el admin, todas.
     supabase.from("tareas").select(tareaCols).eq("activo", true)
       .order("hora_sugerida", { nullsFirst: false }),
@@ -148,12 +158,30 @@ export default async function TareasPage({
           .order("updated_at", { ascending: false })
           .limit(20)
       : Promise.resolve({ data: [] }),
+    // Resumen semanal (Lun-Dom): el estado general que pidió el cliente.
+    supabase
+      .from("tarea_ocurrencias")
+      .select("id, tarea_id, fecha, estado")
+      .gte("fecha", inicioSemana)
+      .lte("fecha", hoy),
+    esAdmin
+      ? supabase.from("profiles").select("id, nombre").eq("activo", true).order("nombre")
+      : Promise.resolve({ data: [] }),
+    // Badge de mensajes: comentarios de otros sin MI lectura (la RLS filtra).
+    supabase.rpc("comentarios_no_leidos"),
   ])
 
   const catalogoTodo = (catalogoRes.data ?? []) as unknown as TareaRow[]
   const deHoy = (hoyRes.data ?? []) as unknown as OcurrenciaRow[]
   const atrasadas = (atrasadasRes.data ?? []) as unknown as OcurrenciaRow[]
   const historial = (historialRes.data ?? []) as unknown as HistorialRow[]
+  const semana = (semanaRes.data ?? []) as unknown as Pick<OcurrenciaRow, "id" | "tarea_id" | "fecha" | "estado">[]
+  const usuarios = (usuariosRes.data ?? []) as { id: string; nombre: string }[]
+  const noLeidosPorTarea = new Map(
+    ((noLeidosRes.data ?? []) as { tarea_id: string; no_leidos: number }[])
+      .map((r) => [r.tarea_id, Number(r.no_leidos)]),
+  )
+  const totalNoLeidos = Array.from(noLeidosPorTarea.values()).reduce((a, b) => a + b, 0)
 
   const ocurrenciaHoy = new Map(deHoy.map((o) => [o.tarea_id, o]))
   const tareasAtrasadas = new Set(atrasadas.map((o) => o.tarea_id))
@@ -175,11 +203,28 @@ export default async function TareasPage({
   ).sort()
   const fArea = searchParams.area ?? ""
   const fResp = searchParams.resp ?? ""
+  // `f` viene de las cards de arriba: son filtros clickeables.
+  const fEstado = ["finalizadas", "en_proceso", "atrasadas"].includes(searchParams.f ?? "")
+    ? searchParams.f!
+    : ""
   const catalogo = catalogoTodo.filter((t) => {
     if (fArea && (t.area ?? "Sin área") !== fArea) return false
     if (fResp && (t.asignado?.nombre ?? "Sin asignar") !== fResp) return false
+    if (fEstado === "finalizadas" && ocurrenciaHoy.get(t.id)?.estado !== "FINALIZADA") return false
+    if (fEstado === "en_proceso" && ocurrenciaHoy.get(t.id)?.estado !== "EN_PROCESO") return false
+    if (fEstado === "atrasadas" && !esAtrasada(t)) return false
     return true
   })
+
+  // Las cards linkean conservando los filtros de área/responsable.
+  function urlConFiltro(f: string): string {
+    const params = new URLSearchParams()
+    if (fArea) params.set("area", fArea)
+    if (fResp) params.set("resp", fResp)
+    if (f) params.set("f", f)
+    const qs = params.toString()
+    return qs ? `${DOMINIO.tareas.ruta}?${qs}` : DOMINIO.tareas.ruta
+  }
 
   // ─── Agrupar por área (la unidad mental de la planilla del cliente) ───────
   const porArea = new Map<string, TareaRow[]>()
@@ -195,6 +240,37 @@ export default async function TareasPage({
   const totalAtrasadas = atrasadas.length
   const ent = DOMINIO.tareas
 
+  // ─── Resumen semanal (Lun → hoy) ──────────────────────────────────────────
+  const DIA_CORTO = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]
+  const porFecha = new Map<string, { total: number; hechas: number }>()
+  const porResponsable = new Map<string, { total: number; hechas: number; atrasadas: number }>()
+  for (const o of semana) {
+    const dia = porFecha.get(o.fecha) ?? { total: 0, hechas: 0 }
+    dia.total += 1
+    if (o.estado === "FINALIZADA") dia.hechas += 1
+    porFecha.set(o.fecha, dia)
+
+    const t = tareaPorId.get(o.tarea_id)
+    if (t) {
+      const key = t.asignado?.nombre ?? "Sin asignar"
+      const r = porResponsable.get(key) ?? { total: 0, hechas: 0, atrasadas: 0 }
+      r.total += 1
+      if (o.estado === "FINALIZADA") r.hechas += 1
+      else if (o.fecha < hoy) r.atrasadas += 1
+      porResponsable.set(key, r)
+    }
+  }
+  const diasSemana: { fecha: string; label: string; futuro: boolean }[] = []
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(lunes)
+    d.setDate(lunes.getDate() + i)
+    const fecha = toISODate(d)
+    diasSemana.push({ fecha, label: `${DIA_CORTO[d.getDay()]} ${d.getDate()}`, futuro: fecha > hoy })
+  }
+  const semanaTotal = semana.length
+  const semanaHechas = semana.filter((o) => o.estado === "FINALIZADA").length
+  const semanaAtrasadas = semana.filter((o) => o.estado !== "FINALIZADA" && o.fecha < hoy).length
+
   return (
     <div className="app-circuit min-h-[calc(100vh-4rem)] px-6 md:px-10 py-8">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -208,6 +284,11 @@ export default async function TareasPage({
             </h1>
             <p className="text-app-secondary mt-1">
               {formatFecha(hoy)} · {esAdmin ? "el día de todo el equipo" : "tu día, ordenado por horario"}
+              {totalNoLeidos > 0 && (
+                <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-app-accent/40 bg-app-accent/10 px-2 py-0.5 font-mono text-[11px] text-app-accent align-middle">
+                  💬 {totalNoLeidos} {totalNoLeidos === 1 ? "mensaje nuevo" : "mensajes nuevos"}
+                </span>
+              )}
             </p>
           </div>
           {esAdmin && (
@@ -235,22 +316,115 @@ export default async function TareasPage({
           seccion="tareas"
         />
 
-        {/* ─── KPIs del día ─────────────────────────────────────────────── */}
+        {/* ─── KPIs del día — clickeables: cada card filtra la tabla ────── */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="Tareas de hoy" valor={String(totalHoy)} tono="accent" />
+          <StatCard
+            label="Tareas de hoy"
+            valor={String(totalHoy)}
+            tono="accent"
+            href={urlConFiltro("")}
+            activa={fEstado === ""}
+          />
           <StatCard
             label="Finalizadas"
             valor={`${finalizadasHoy}/${totalHoy}`}
             tono="green"
             progreso={totalHoy > 0 ? finalizadasHoy / totalHoy : 0}
+            href={urlConFiltro("finalizadas")}
+            activa={fEstado === "finalizadas"}
           />
-          <StatCard label="En proceso" valor={String(enProcesoHoy)} tono="accent" />
+          <StatCard
+            label="En proceso"
+            valor={String(enProcesoHoy)}
+            tono="accent"
+            href={urlConFiltro("en_proceso")}
+            activa={fEstado === "en_proceso"}
+          />
           <StatCard
             label="Atrasadas"
             valor={String(totalAtrasadas)}
             tono={totalAtrasadas > 0 ? "red" : "muted"}
+            href={urlConFiltro("atrasadas")}
+            activa={fEstado === "atrasadas"}
           />
         </section>
+
+        {/* ─── Resumen de la semana ─────────────────────────────────────── */}
+        <details className="group rounded-xl border border-app-line-soft bg-app-card overflow-hidden">
+          <summary className="flex items-center justify-between gap-4 px-5 py-3.5 cursor-pointer select-none hover:bg-app-surface-mid/30 transition-colors list-none [&::-webkit-details-marker]:hidden">
+            <div className="flex items-center gap-3">
+              <ChevronDown className="w-4 h-4 text-app-muted transition-transform group-open:rotate-0 -rotate-90" />
+              <h2 className="font-display font-semibold">Resumen de la semana</h2>
+            </div>
+            <span className="font-mono text-[11px] text-app-secondary">
+              {semanaHechas}/{semanaTotal} finalizadas
+              {semanaAtrasadas > 0 && (
+                <span className="text-app-red"> · {semanaAtrasadas} atrasadas</span>
+              )}
+            </span>
+          </summary>
+          <div className="border-t border-app-line-soft p-5 space-y-5">
+            {/* Un cuadrito por día: cuánto se hizo de lo que tocaba. */}
+            <div className="grid grid-cols-7 gap-2">
+              {diasSemana.map((d) => {
+                const stats = porFecha.get(d.fecha)
+                const pct = stats && stats.total > 0 ? stats.hechas / stats.total : null
+                const esHoy = d.fecha === hoy
+                return (
+                  <div
+                    key={d.fecha}
+                    className={`rounded-lg border px-2 py-2 text-center ${
+                      esHoy ? "border-app-accent/50 bg-app-accent/5" : "border-app-line-soft"
+                    } ${d.futuro ? "opacity-40" : ""}`}
+                  >
+                    <p className="font-mono text-[10px] text-app-muted uppercase">{d.label}</p>
+                    <p className="font-display text-sm font-semibold mt-0.5">
+                      {d.futuro ? "—" : stats ? `${stats.hechas}/${stats.total}` : "—"}
+                    </p>
+                    <div className="mt-1.5 h-1 rounded-full bg-app-surface-mid overflow-hidden">
+                      {pct !== null && !d.futuro && (
+                        <div
+                          className={`h-full rounded-full ${
+                            pct === 1 ? "bg-app-green" : pct >= 0.5 ? "bg-app-accent" : "bg-app-amber"
+                          }`}
+                          style={{ width: `${Math.round(pct * 100)}%` }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Cumplimiento por persona (admin): quién viene bien y quién no. */}
+            {esAdmin && porResponsable.size > 0 && (
+              <div className="space-y-2">
+                {Array.from(porResponsable.entries())
+                  .sort((a, b) => b[1].total - a[1].total)
+                  .map(([nombre, r]) => {
+                    const pct = r.total > 0 ? r.hechas / r.total : 0
+                    return (
+                      <div key={nombre} className="flex items-center gap-3">
+                        <span className="w-36 truncate text-sm text-app-text shrink-0">{nombre}</span>
+                        <div className="flex-1 h-2 rounded-full bg-app-surface-mid overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${
+                              pct === 1 ? "bg-app-green" : pct >= 0.5 ? "bg-app-accent" : "bg-app-amber"
+                            }`}
+                            style={{ width: `${Math.round(pct * 100)}%` }}
+                          />
+                        </div>
+                        <span className="font-mono text-[11px] text-app-secondary w-24 text-right shrink-0">
+                          {r.hechas}/{r.total}
+                          {r.atrasadas > 0 && <span className="text-app-red"> · {r.atrasadas} atr.</span>}
+                        </span>
+                      </div>
+                    )
+                  })}
+              </div>
+            )}
+          </div>
+        </details>
 
         {/* ─── Filtros (admin) ──────────────────────────────────────────── */}
         {esAdmin && (
@@ -366,14 +540,28 @@ export default async function TareasPage({
                               </p>
                             </TableCell>
                             {esAdmin && (
-                              <TableCell className="py-2.5 hidden md:table-cell text-sm whitespace-nowrap">
-                                {t.asignado?.nombre ?? (
-                                  <span className="text-app-amber font-mono text-xs">Sin asignar</span>
-                                )}
+                              // Atajo: asignar responsable desde la fila.
+                              <TableCell className="py-2.5 hidden md:table-cell whitespace-nowrap">
+                                <ResponsableSelect
+                                  tareaId={t.id}
+                                  asignadoA={t.asignado_a}
+                                  usuarios={usuarios}
+                                />
                               </TableCell>
                             )}
-                            <TableCell className="py-2.5 hidden sm:table-cell font-mono text-xs text-app-secondary whitespace-nowrap">
-                              {frecuenciaCorta(t)}
+                            <TableCell className="py-2.5 hidden sm:table-cell whitespace-nowrap">
+                              {esAdmin ? (
+                                // Atajo: cambiar frecuencia desde la fila.
+                                <FrecuenciaSelect
+                                  tareaId={t.id}
+                                  frecuencia={t.frecuencia}
+                                  detalle={frecuenciaCorta(t)}
+                                />
+                              ) : (
+                                <span className="font-mono text-xs text-app-secondary">
+                                  {frecuenciaCorta(t)}
+                                </span>
+                              )}
                             </TableCell>
                             <TableCell className="py-2.5 text-right whitespace-nowrap">
                               {oc ? (
@@ -390,6 +578,15 @@ export default async function TareasPage({
                               ) : (
                                 <span className="font-mono text-[11px] text-app-muted">No toca hoy</span>
                               )}
+                            </TableCell>
+                            {/* La conversación de la tarea (0026). */}
+                            <TableCell className="py-2.5 w-10 text-right">
+                              <TareaComentariosDialog
+                                tareaId={t.id}
+                                tareaNombre={t.nombre}
+                                noLeidos={noLeidosPorTarea.get(t.id) ?? 0}
+                                usuarioId={user.id}
+                              />
                             </TableCell>
                           </>
                         )
@@ -511,17 +708,22 @@ export default async function TareasPage({
   )
 }
 
-// Card de KPI del día. `progreso` (0-1) pinta una barrita abajo.
+// Card de KPI clickeable: filtra la tabla de abajo. `activa` marca cuál
+// filtro está aplicado. `progreso` (0-1) pinta una barrita abajo.
 function StatCard({
   label,
   valor,
   tono,
   progreso,
+  href,
+  activa,
 }: {
   label: string
   valor: string
   tono: "accent" | "green" | "red" | "muted"
   progreso?: number
+  href: string
+  activa: boolean
 }) {
   const color = {
     accent: "text-app-accent",
@@ -530,7 +732,12 @@ function StatCard({
     muted:  "text-app-muted",
   }[tono]
   return (
-    <div className="rounded-xl border border-app-line-soft bg-app-card px-4 py-3">
+    <Link
+      href={href}
+      className={`block rounded-xl border bg-app-card px-4 py-3 transition-colors hover:border-app-accent/50 ${
+        activa ? "border-app-accent ring-1 ring-app-accent/40" : "border-app-line-soft"
+      }`}
+    >
       <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">{label}</p>
       <p className={`font-display text-2xl font-bold mt-0.5 ${color}`}>{valor}</p>
       {progreso !== undefined && (
@@ -541,6 +748,6 @@ function StatCard({
           />
         </div>
       )}
-    </div>
+    </Link>
   )
 }
