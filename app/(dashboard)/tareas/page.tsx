@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { Plus, ExternalLink, History } from "lucide-react"
+import { Plus, ExternalLink, History, ChevronDown } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Badge } from "@/components/ui/badge"
@@ -10,7 +10,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableEmpty,
   TableHead,
   TableHeader,
   TableRow,
@@ -25,16 +24,17 @@ import {
   ESTADO_TAREA_LABEL,
   ESTADO_TAREA_VARIANT,
   PRIORIDAD_TAREA_LABEL,
-  PRIORIDAD_TAREA_VARIANT,
-  describirFrecuencia,
+  frecuenciaCorta,
 } from "@/lib/tareas-ui"
 import type { EstadoTarea, FrecuenciaTarea, PrioridadTarea } from "@/lib/validators/tarea"
 
-// La vista es LA PLANILLA del cliente, pero viva: una tabla con todas las
-// columnas del Bexa_Sistema_Operativo (ID, tarea, área, responsable,
-// frecuencia, prioridad, tiempo, estado del día, realización, atrasada) y el
-// estado editable en la fila. Abajo, el historial de lo que el equipo va
-// haciendo. El empleado ve la misma tabla, filtrada por RLS a SUS tareas.
+// UX del módulo (feedback del cliente, 2 iteraciones):
+//   1ª: tarjetas → "no se entiende". 2ª: tabla completa → "mucho dato
+//   amontonado". Esta versión es el patrón de las apps de operaciones
+//   (Linear/Asana "My Tasks"): KPIs del día arriba, filtros, grupos por ÁREA
+//   colapsables con barra de progreso, y filas densas donde el dato frío
+//   (prioridad, frecuencia) se achica a un punto de color y una línea mono,
+//   para que lo operativo (tarea + estado) respire.
 
 type TareaRow = {
   id: string
@@ -76,8 +76,16 @@ type HistorialRow = {
   completador: { nombre: string } | null
 }
 
+// El punto de color reemplaza al badge de prioridad: misma información,
+// una fracción del ruido visual.
+const PRIORIDAD_DOT: Record<PrioridadTarea, string> = {
+  ALTA:  "bg-app-red",
+  MEDIA: "bg-app-amber",
+  BAJA:  "bg-app-muted/50",
+}
+
 function horaCorta(ts: string | null): string {
-  if (!ts) return "—"
+  if (!ts) return ""
   return new Date(ts).toLocaleTimeString("es-AR", {
     hour: "2-digit",
     minute: "2-digit",
@@ -85,7 +93,11 @@ function horaCorta(ts: string | null): string {
   })
 }
 
-export default async function TareasPage() {
+export default async function TareasPage({
+  searchParams,
+}: {
+  searchParams: { area?: string; resp?: string }
+}) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
@@ -112,7 +124,7 @@ export default async function TareasPage() {
   const [catalogoRes, hoyRes, atrasadasRes, historialRes] = await Promise.all([
     // La RLS filtra: el empleado recibe SOLO sus tareas; el admin, todas.
     supabase.from("tareas").select(tareaCols).eq("activo", true)
-      .order("area").order("hora_sugerida", { nullsFirst: false }),
+      .order("hora_sugerida", { nullsFirst: false }),
     supabase
       .from("tarea_ocurrencias")
       .select("id, tarea_id, fecha, estado, iniciada_at, finalizada_at, notas")
@@ -124,7 +136,6 @@ export default async function TareasPage() {
       .neq("estado", "FINALIZADA")
       .order("fecha", { ascending: false })
       .limit(60),
-    // Historial de lo que el equipo va haciendo (lo pide el admin abajo).
     esAdmin
       ? supabase
           .from("tarea_ocurrencias")
@@ -135,27 +146,21 @@ export default async function TareasPage() {
           `)
           .neq("estado", "PENDIENTE")
           .order("updated_at", { ascending: false })
-          .limit(25)
+          .limit(20)
       : Promise.resolve({ data: [] }),
   ])
 
-  const catalogo = (catalogoRes.data ?? []) as unknown as TareaRow[]
+  const catalogoTodo = (catalogoRes.data ?? []) as unknown as TareaRow[]
   const deHoy = (hoyRes.data ?? []) as unknown as OcurrenciaRow[]
   const atrasadas = (atrasadasRes.data ?? []) as unknown as OcurrenciaRow[]
   const historial = (historialRes.data ?? []) as unknown as HistorialRow[]
 
   const ocurrenciaHoy = new Map(deHoy.map((o) => [o.tarea_id, o]))
-  const atrasadasPorTarea = new Map<string, OcurrenciaRow[]>()
-  for (const o of atrasadas) {
-    atrasadasPorTarea.set(o.tarea_id, [...(atrasadasPorTarea.get(o.tarea_id) ?? []), o])
-  }
-  const tareaPorId = new Map(catalogo.map((t) => [t.id, t]))
+  const tareasAtrasadas = new Set(atrasadas.map((o) => o.tarea_id))
+  const tareaPorId = new Map(catalogoTodo.map((t) => [t.id, t]))
 
-  // "Atrasada" se CALCULA, como la columna de la planilla pero sin poder
-  // mentir: hay ejecuciones viejas sin finalizar, o la fecha límite venció y
-  // hoy no está finalizada.
   function esAtrasada(t: TareaRow): boolean {
-    if (atrasadasPorTarea.has(t.id)) return true
+    if (tareasAtrasadas.has(t.id)) return true
     if (t.fecha_limite && t.fecha_limite < hoy) {
       const oc = ocurrenciaHoy.get(t.id)
       return !oc || oc.estado !== "FINALIZADA"
@@ -163,12 +168,36 @@ export default async function TareasPage() {
     return false
   }
 
+  // ─── Filtros del admin (server-side, via querystring) ─────────────────────
+  const areas = Array.from(new Set(catalogoTodo.map((t) => t.area ?? "Sin área"))).sort()
+  const responsables = Array.from(
+    new Set(catalogoTodo.map((t) => t.asignado?.nombre ?? "Sin asignar")),
+  ).sort()
+  const fArea = searchParams.area ?? ""
+  const fResp = searchParams.resp ?? ""
+  const catalogo = catalogoTodo.filter((t) => {
+    if (fArea && (t.area ?? "Sin área") !== fArea) return false
+    if (fResp && (t.asignado?.nombre ?? "Sin asignar") !== fResp) return false
+    return true
+  })
+
+  // ─── Agrupar por área (la unidad mental de la planilla del cliente) ───────
+  const porArea = new Map<string, TareaRow[]>()
+  for (const t of catalogo) {
+    const key = t.area ?? "Sin área"
+    porArea.set(key, [...(porArea.get(key) ?? []), t])
+  }
+
+  // ─── KPIs del día ─────────────────────────────────────────────────────────
+  const totalHoy = deHoy.length
   const finalizadasHoy = deHoy.filter((o) => o.estado === "FINALIZADA").length
+  const enProcesoHoy = deHoy.filter((o) => o.estado === "EN_PROCESO").length
+  const totalAtrasadas = atrasadas.length
   const ent = DOMINIO.tareas
 
   return (
     <div className="app-circuit min-h-[calc(100vh-4rem)] px-6 md:px-10 py-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-6xl mx-auto space-y-6">
         <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
             <p className="font-mono text-[11px] text-app-accent tracking-[0.18em] uppercase">
@@ -178,8 +207,7 @@ export default async function TareasPage() {
               {ent.plural}
             </h1>
             <p className="text-app-secondary mt-1">
-              {formatFecha(hoy)} · {finalizadasHoy}/{deHoy.length} finalizadas hoy
-              {esAdmin ? " · Ves todo el equipo." : " · Estas son las tuyas."}
+              {formatFecha(hoy)} · {esAdmin ? "el día de todo el equipo" : "tu día, ordenado por horario"}
             </p>
           </div>
           {esAdmin && (
@@ -187,7 +215,7 @@ export default async function TareasPage() {
               <Button asChild variant="outline" size="sm">
                 <Link href={`${ent.ruta}/auditoria`}>
                   <History className="w-4 h-4" />
-                  Auditoría completa
+                  Auditoría
                 </Link>
               </Button>
               <Button asChild>
@@ -201,157 +229,213 @@ export default async function TareasPage() {
         </header>
 
         <AyudaPantalla
-          que="El sistema operativo del equipo, como la planilla pero vivo: cada tarea con su responsable, frecuencia, prioridad y estado del día. Las diarias, semanales y mensuales aparecen solas cuando les toca."
+          que="El sistema operativo del equipo: cada tarea con su responsable, horario y estado del día, agrupadas por área. Las diarias, semanales y mensuales aparecen solas cuando les toca."
           cuando="Arrancando el día, para ver qué toca. Y al terminar cada tarea: marcala en el momento, no al final del día."
           ojo="La hora en que se marca cada tarea la sella el sistema — el admin ve qué se hizo y cuándo, sin perseguir a nadie."
           seccion="tareas"
         />
 
-        {/* ─── La tabla, estilo planilla ───────────────────────────────── */}
-        <div className="rounded-xl border border-app-line-soft bg-app-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-20">ID</TableHead>
-                  <TableHead className="min-w-[220px]">Tarea</TableHead>
-                  <TableHead className="hidden md:table-cell">Área</TableHead>
-                  {esAdmin && <TableHead>Responsable</TableHead>}
-                  <TableHead className="hidden lg:table-cell">Frecuencia</TableHead>
-                  <TableHead>Prioridad</TableHead>
-                  <TableHead>Estado de hoy</TableHead>
-                  <TableHead className="hidden md:table-cell">Realizada</TableHead>
-                  <TableHead>Atrasada</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {catalogo.length === 0 ? (
-                  <TableEmpty colSpan={esAdmin ? 9 : 8}>
-                    {esAdmin
-                      ? "Sin tareas activas. Creá la primera con el botón de arriba."
-                      : "No tenés tareas asignadas. Si te falta alguna, avisale al admin."}
-                  </TableEmpty>
-                ) : (
-                  catalogo.map((t) => {
-                    const oc = ocurrenciaHoy.get(t.id)
-                    const atrasada = esAtrasada(t)
-                    const fila = (
-                      <>
-                        <TableCell className="font-mono text-app-accent text-xs">
-                          {t.codigo ?? t.id_publico}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-medium">{t.nombre}</span>
-                            {t.manual_url && (
-                              <a
-                                href={t.manual_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-app-muted hover:text-app-accent shrink-0"
-                                aria-label={`Manual de ${t.nombre}`}
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
-                            )}
-                          </div>
-                          {(t.descripcion || t.fecha_limite || t.tiempo_estimado_min) && (
-                            <p className="text-[10.5px] font-mono text-app-muted mt-0.5 max-w-[340px] truncate">
-                              {[
-                                t.tiempo_estimado_min ? `~${t.tiempo_estimado_min} min` : null,
-                                t.fecha_limite ? `límite ${formatFecha(t.fecha_limite)}` : null,
-                                t.descripcion,
-                              ].filter(Boolean).join(" · ")}
-                            </p>
-                          )}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell text-sm text-app-secondary">
-                          {t.area ?? "—"}
-                        </TableCell>
-                        {esAdmin && (
-                          <TableCell className="text-sm">
-                            {t.asignado?.nombre ?? (
-                              <span className="text-app-amber font-mono text-xs">Sin asignar</span>
-                            )}
-                          </TableCell>
-                        )}
-                        <TableCell className="hidden lg:table-cell font-mono text-xs text-app-secondary whitespace-nowrap">
-                          {describirFrecuencia(t)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={PRIORIDAD_TAREA_VARIANT[t.prioridad]}>
-                            {PRIORIDAD_TAREA_LABEL[t.prioridad]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {oc ? (
-                            <EstadoTareaSelect ocurrenciaId={oc.id} estado={oc.estado} />
-                          ) : t.frecuencia === "EVENTUAL" ? (
-                            <RegistrarEventualButton tareaId={t.id} />
-                          ) : (
-                            <span className="font-mono text-[11px] text-app-muted">No toca hoy</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell font-mono text-xs text-app-secondary whitespace-nowrap">
-                          {oc?.finalizada_at ? horaCorta(oc.finalizada_at) : "—"}
-                        </TableCell>
-                        <TableCell>
-                          {atrasada
-                            ? <Badge variant="red">Sí</Badge>
-                            : <span className="font-mono text-xs text-app-muted">No</span>}
-                        </TableCell>
-                      </>
-                    )
-                    // El admin entra a editar la definición con un click en la
-                    // fila; para el empleado la fila es informativa.
-                    return esAdmin ? (
-                      <LinkRow key={t.id} href={`${ent.ruta}/${t.id}`}>{fila}</LinkRow>
-                    ) : (
-                      <TableRow key={t.id}>{fila}</TableRow>
-                    )
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+        {/* ─── KPIs del día ─────────────────────────────────────────────── */}
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <StatCard label="Tareas de hoy" valor={String(totalHoy)} tono="accent" />
+          <StatCard
+            label="Finalizadas"
+            valor={`${finalizadasHoy}/${totalHoy}`}
+            tono="green"
+            progreso={totalHoy > 0 ? finalizadasHoy / totalHoy : 0}
+          />
+          <StatCard label="En proceso" valor={String(enProcesoHoy)} tono="accent" />
+          <StatCard
+            label="Atrasadas"
+            valor={String(totalAtrasadas)}
+            tono={totalAtrasadas > 0 ? "red" : "muted"}
+          />
+        </section>
 
-        {/* ─── Pendientes de días anteriores ───────────────────────────── */}
+        {/* ─── Filtros (admin) ──────────────────────────────────────────── */}
+        {esAdmin && (
+          <form action={ent.ruta} method="get" className="flex flex-wrap items-center gap-2">
+            <select
+              name="area"
+              defaultValue={fArea}
+              className="h-9 rounded-md bg-app-input border border-app-line px-3 text-sm text-app-text"
+            >
+              <option value="">Todas las áreas</option>
+              {areas.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+            <select
+              name="resp"
+              defaultValue={fResp}
+              className="h-9 rounded-md bg-app-input border border-app-line px-3 text-sm text-app-text"
+            >
+              <option value="">Todo el equipo</option>
+              {responsables.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <Button type="submit" variant="outline" size="sm">Filtrar</Button>
+            {(fArea || fResp) && (
+              <Button asChild variant="ghost" size="sm">
+                <Link href={ent.ruta}>Limpiar</Link>
+              </Button>
+            )}
+          </form>
+        )}
+
+        {/* ─── Grupos por área ──────────────────────────────────────────── */}
+        {porArea.size === 0 ? (
+          <section className="rounded-xl border border-app-line-soft bg-app-card p-8 text-center">
+            <p className="text-sm text-app-muted font-mono">
+              {esAdmin
+                ? "Sin tareas con estos filtros. Probá limpiarlos o creá una nueva."
+                : "No tenés tareas asignadas. Si te falta alguna, avisale al admin."}
+            </p>
+          </section>
+        ) : (
+          Array.from(porArea.entries()).map(([area, tareas]) => {
+            const conOcurrencia = tareas.filter((t) => ocurrenciaHoy.has(t.id))
+            const hechas = conOcurrencia.filter(
+              (t) => ocurrenciaHoy.get(t.id)!.estado === "FINALIZADA",
+            ).length
+            const progreso = conOcurrencia.length > 0 ? hechas / conOcurrencia.length : 0
+            return (
+              <details
+                key={area}
+                open
+                className="group rounded-xl border border-app-line-soft bg-app-card overflow-hidden"
+              >
+                <summary className="flex items-center justify-between gap-4 px-5 py-3.5 cursor-pointer select-none hover:bg-app-surface-mid/30 transition-colors list-none [&::-webkit-details-marker]:hidden">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <ChevronDown className="w-4 h-4 text-app-muted transition-transform group-open:rotate-0 -rotate-90 shrink-0" />
+                    <h2 className="font-display font-semibold truncate">{area}</h2>
+                    <span className="font-mono text-[11px] text-app-muted shrink-0">
+                      {tareas.length} {tareas.length === 1 ? "tarea" : "tareas"}
+                    </span>
+                  </div>
+                  {conOcurrencia.length > 0 && (
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="w-24 h-1.5 rounded-full bg-app-surface-mid overflow-hidden hidden sm:block">
+                        <div
+                          className={`h-full rounded-full ${progreso === 1 ? "bg-app-green" : "bg-app-accent"}`}
+                          style={{ width: `${Math.round(progreso * 100)}%` }}
+                        />
+                      </div>
+                      <span className="font-mono text-[11px] text-app-secondary">
+                        {hechas}/{conOcurrencia.length} hoy
+                      </span>
+                    </div>
+                  )}
+                </summary>
+
+                <div className="border-t border-app-line-soft overflow-x-auto">
+                  <Table className="border-0">
+                    <TableBody>
+                      {tareas.map((t) => {
+                        const oc = ocurrenciaHoy.get(t.id)
+                        const atrasada = esAtrasada(t)
+                        const fila = (
+                          <>
+                            {/* Prioridad: punto de color, no badge — menos ruido. */}
+                            <TableCell className="py-2.5 w-8 pr-0">
+                              <span
+                                className={`inline-block w-2 h-2 rounded-full ${PRIORIDAD_DOT[t.prioridad]}`}
+                                title={`Prioridad ${PRIORIDAD_TAREA_LABEL[t.prioridad].toLowerCase()}`}
+                              />
+                            </TableCell>
+                            <TableCell className="py-2.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-sm font-medium text-app-text">{t.nombre}</span>
+                                {atrasada && <Badge variant="red">Atrasada</Badge>}
+                                {t.manual_url && (
+                                  <a
+                                    href={t.manual_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-app-muted hover:text-app-accent shrink-0"
+                                    aria-label={`Manual de ${t.nombre}`}
+                                  >
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                )}
+                              </div>
+                              <p className="text-[10.5px] font-mono text-app-muted mt-0.5">
+                                {[
+                                  t.codigo ?? t.id_publico,
+                                  t.tiempo_estimado_min ? `~${t.tiempo_estimado_min} min` : null,
+                                  t.fecha_limite ? `límite ${formatFecha(t.fecha_limite)}` : null,
+                                ].filter(Boolean).join(" · ")}
+                              </p>
+                            </TableCell>
+                            {esAdmin && (
+                              <TableCell className="py-2.5 hidden md:table-cell text-sm whitespace-nowrap">
+                                {t.asignado?.nombre ?? (
+                                  <span className="text-app-amber font-mono text-xs">Sin asignar</span>
+                                )}
+                              </TableCell>
+                            )}
+                            <TableCell className="py-2.5 hidden sm:table-cell font-mono text-xs text-app-secondary whitespace-nowrap">
+                              {frecuenciaCorta(t)}
+                            </TableCell>
+                            <TableCell className="py-2.5 text-right whitespace-nowrap">
+                              {oc ? (
+                                <div className="inline-flex flex-col items-end gap-0.5">
+                                  <EstadoTareaSelect ocurrenciaId={oc.id} estado={oc.estado} />
+                                  {oc.finalizada_at && (
+                                    <span className="font-mono text-[10px] text-app-green">
+                                      ✓ {horaCorta(oc.finalizada_at)}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : t.frecuencia === "EVENTUAL" ? (
+                                <RegistrarEventualButton tareaId={t.id} />
+                              ) : (
+                                <span className="font-mono text-[11px] text-app-muted">No toca hoy</span>
+                              )}
+                            </TableCell>
+                          </>
+                        )
+                        return esAdmin ? (
+                          <LinkRow key={t.id} href={`${ent.ruta}/${t.id}`}>{fila}</LinkRow>
+                        ) : (
+                          <TableRow key={t.id}>{fila}</TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </details>
+            )
+          })
+        )}
+
+        {/* ─── Pendientes de días anteriores ────────────────────────────── */}
         {atrasadas.length > 0 && (
           <section className="rounded-xl border border-app-amber/40 bg-app-card overflow-hidden">
             <div className="px-5 py-3 border-b border-app-line-soft flex items-center justify-between">
               <h2 className="font-display font-semibold text-app-amber">
                 Pendientes de días anteriores ({atrasadas.length})
               </h2>
-              <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">
+              <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest hidden sm:block">
                 Finalizalas o siguen acumulando
               </p>
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-24">Día</TableHead>
-                  <TableHead>Tarea</TableHead>
-                  {esAdmin && <TableHead className="hidden md:table-cell">Responsable</TableHead>}
-                  <TableHead>Estado</TableHead>
-                </TableRow>
-              </TableHeader>
+            <Table className="border-0">
               <TableBody>
                 {atrasadas.map((o) => {
                   const t = tareaPorId.get(o.tarea_id)
                   return (
                     <TableRow key={o.id}>
-                      <TableCell className="font-mono text-xs text-app-secondary">
+                      <TableCell className="py-2.5 w-24 font-mono text-xs text-app-secondary whitespace-nowrap">
                         {formatFecha(o.fecha)}
                       </TableCell>
-                      <TableCell className="text-sm font-medium">{t?.nombre ?? "—"}</TableCell>
-                      {esAdmin && (
-                        <TableCell className="hidden md:table-cell text-sm text-app-secondary">
-                          {t?.asignado?.nombre ?? "Sin asignar"}
-                        </TableCell>
-                      )}
-                      <TableCell>
+                      <TableCell className="py-2.5">
+                        <span className="text-sm font-medium text-app-text">{t?.nombre ?? "—"}</span>
+                        {esAdmin && (
+                          <span className="ml-2 font-mono text-[10.5px] text-app-muted">
+                            {t?.asignado?.nombre ?? "Sin asignar"}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-2.5 text-right">
                         <EstadoTareaSelect ocurrenciaId={o.id} estado={o.estado} />
                       </TableCell>
                     </TableRow>
@@ -362,69 +446,101 @@ export default async function TareasPage() {
           </section>
         )}
 
-        {/* ─── Historial: lo que el equipo va haciendo (admin) ─────────── */}
-        {esAdmin && (
-          <section className="rounded-xl border border-app-line-soft bg-app-card overflow-hidden">
-            <div className="px-5 py-3 border-b border-app-line-soft flex items-center justify-between">
-              <h2 className="font-display font-semibold">Lo que el equipo va haciendo</h2>
+        {/* ─── Historial: lo que el equipo va haciendo (admin) ──────────── */}
+        {esAdmin && historial.length > 0 && (
+          <details className="group rounded-xl border border-app-line-soft bg-app-card overflow-hidden">
+            <summary className="flex items-center justify-between gap-4 px-5 py-3.5 cursor-pointer select-none hover:bg-app-surface-mid/30 transition-colors list-none [&::-webkit-details-marker]:hidden">
+              <div className="flex items-center gap-3">
+                <ChevronDown className="w-4 h-4 text-app-muted transition-transform group-open:rotate-0 -rotate-90" />
+                <h2 className="font-display font-semibold">Lo que el equipo va haciendo</h2>
+              </div>
               <Link
                 href={`${ent.ruta}/auditoria`}
                 className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest hover:text-app-accent"
               >
                 Auditoría completa →
               </Link>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-24">Fecha</TableHead>
-                  <TableHead>Tarea</TableHead>
-                  <TableHead className="hidden md:table-cell">Quién</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="hidden lg:table-cell">Inició</TableHead>
-                  <TableHead className="hidden md:table-cell">Terminó</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {historial.length === 0 ? (
-                  <TableEmpty colSpan={6}>
-                    Todavía nadie marcó nada. Apenas el equipo empiece a trabajar,
-                    acá aparece quién hizo qué y a qué hora real.
-                  </TableEmpty>
-                ) : (
-                  historial.map((h) => (
+            </summary>
+            <div className="border-t border-app-line-soft">
+              <Table className="border-0">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-24">Fecha</TableHead>
+                    <TableHead>Tarea</TableHead>
+                    <TableHead className="hidden md:table-cell">Quién</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead className="hidden lg:table-cell">Inició</TableHead>
+                    <TableHead className="hidden md:table-cell">Terminó</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {historial.map((h) => (
                     <TableRow key={h.id}>
-                      <TableCell className="font-mono text-xs text-app-secondary">
+                      <TableCell className="py-2.5 font-mono text-xs text-app-secondary">
                         {formatFecha(h.fecha)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-2.5">
                         <span className="font-mono text-[11px] text-app-accent mr-2">
                           {h.tarea?.codigo ?? h.tarea?.id_publico ?? ""}
                         </span>
                         <span className="text-sm">{h.tarea?.nombre ?? "—"}</span>
                       </TableCell>
-                      <TableCell className="hidden md:table-cell text-sm text-app-secondary">
+                      <TableCell className="py-2.5 hidden md:table-cell text-sm text-app-secondary">
                         {h.completador?.nombre ?? h.tarea?.asignado?.nombre ?? "—"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-2.5">
                         <Badge variant={ESTADO_TAREA_VARIANT[h.estado]}>
                           {ESTADO_TAREA_LABEL[h.estado]}
                         </Badge>
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell font-mono text-xs text-app-secondary">
-                        {horaCorta(h.iniciada_at)}
+                      <TableCell className="py-2.5 hidden lg:table-cell font-mono text-xs text-app-secondary">
+                        {horaCorta(h.iniciada_at) || "—"}
                       </TableCell>
-                      <TableCell className="hidden md:table-cell font-mono text-xs text-app-secondary">
-                        {horaCorta(h.finalizada_at)}
+                      <TableCell className="py-2.5 hidden md:table-cell font-mono text-xs text-app-secondary">
+                        {horaCorta(h.finalizada_at) || "—"}
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </section>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </details>
         )}
       </div>
+    </div>
+  )
+}
+
+// Card de KPI del día. `progreso` (0-1) pinta una barrita abajo.
+function StatCard({
+  label,
+  valor,
+  tono,
+  progreso,
+}: {
+  label: string
+  valor: string
+  tono: "accent" | "green" | "red" | "muted"
+  progreso?: number
+}) {
+  const color = {
+    accent: "text-app-accent",
+    green:  "text-app-green",
+    red:    "text-app-red",
+    muted:  "text-app-muted",
+  }[tono]
+  return (
+    <div className="rounded-xl border border-app-line-soft bg-app-card px-4 py-3">
+      <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">{label}</p>
+      <p className={`font-display text-2xl font-bold mt-0.5 ${color}`}>{valor}</p>
+      {progreso !== undefined && (
+        <div className="mt-2 h-1 rounded-full bg-app-surface-mid overflow-hidden">
+          <div
+            className={`h-full rounded-full ${progreso === 1 ? "bg-app-green" : "bg-app-accent"}`}
+            style={{ width: `${Math.round(progreso * 100)}%` }}
+          />
+        </div>
+      )}
     </div>
   )
 }

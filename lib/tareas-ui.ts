@@ -41,6 +41,26 @@ export const DIA_SEMANA_LABEL: Record<number, string> = {
   6: "Sábado",
 }
 
+// Versión corta para tablas densas: "09:00 · Diaria" / "Mié 10:00" /
+// "Fin de mes" / "Eventual". La hora primero: es lo que ordena el día.
+export function frecuenciaCorta(t: {
+  frecuencia: FrecuenciaTarea
+  dia_semana: number | null
+  dia_mes: number | null
+  hora_sugerida: string | null
+}): string {
+  const hora = t.hora_sugerida?.slice(0, 5)
+  switch (t.frecuencia) {
+    case "DIARIA":   return hora ? `${hora} · Diaria` : "Diaria"
+    case "SEMANAL": {
+      const dia = (DIA_SEMANA_LABEL[t.dia_semana ?? 1] ?? "").slice(0, 3)
+      return hora ? `${dia} ${hora}` : dia
+    }
+    case "MENSUAL":  return t.dia_mes === 31 ? "Fin de mes" : `Día ${t.dia_mes} del mes`
+    case "EVENTUAL": return "Eventual"
+  }
+}
+
 // "Diaria · 09:00" / "Semanal · Lunes 10:00" / "Mensual · día 31" / "Cuando corresponda"
 export function describirFrecuencia(t: {
   frecuencia: FrecuenciaTarea
