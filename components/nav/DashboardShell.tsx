@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Menu } from "lucide-react"
+import Link from "next/link"
+import { Menu, GraduationCap } from "lucide-react"
 import { Sidebar, SidebarMobileClose } from "./Sidebar"
 import { SignOutButton } from "@/components/SignOutButton"
 import { cn } from "@/lib/utils"
@@ -60,6 +61,23 @@ export function DashboardShell({ navGroups, userDisplay, userRol, children }: Pr
             <div className="hidden lg:block" />
 
             <div className="flex items-center gap-3">
+              {/* Manual arriba a la derecha, permanente y en todas las
+                  pantallas. El item del sidebar sigue estando, pero acá lo ve
+                  el que está perdido AHORA: no hay que saber dónde buscarlo. */}
+              <Link
+                href="/manual"
+                className={cn(
+                  "inline-flex items-center gap-1.5 h-9 px-3 rounded-md",
+                  "border border-app-line-soft text-app-secondary",
+                  "hover:text-app-accent hover:border-app-accent/40 hover:bg-app-surface-mid/50",
+                  "transition-colors",
+                )}
+                title="Manual de uso: tutoriales paso a paso y preguntas frecuentes"
+              >
+                <GraduationCap className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline text-sm">Manual</span>
+              </Link>
+
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-medium leading-tight">{userDisplay}</p>
                 <p className="font-mono text-[10px] text-app-muted uppercase tracking-wider">

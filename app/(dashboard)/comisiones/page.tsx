@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import {
   Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
@@ -7,7 +8,9 @@ import { ROL } from "@/lib/constants"
 import { formatFecha, formatPesos } from "@/lib/utils"
 
 // Liquidación semanal — decisión cliente 2026-07-13.
-// Vendedor ve solo lo suyo (RLS de comisiones). Admin ve todo.
+// El vendedor ve SOLO su liquidación; el admin ve la de todos. Se filtra en dos
+// lugares a propósito: acá (explícito) y en la RLS de `comisiones`, que la
+// vista respeta desde la 0016. Defensa en profundidad.
 export default async function ComisionesPage() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -17,11 +20,14 @@ export default async function ComisionesPage() {
   if (profile.rol === ROL.MARKETING) redirect("/panel")
   const esAdmin = profile.rol === ROL.ADMIN
 
+  let queryComisiones = supabase.from("v_comisiones_semana")
+    .select("vendedor_id, semana_inicio, ventas_count, base, total, vendedor:vendedor_id ( nombre )")
+    .order("semana_inicio", { ascending: false })
+    .limit(200)
+  if (!esAdmin) queryComisiones = queryComisiones.eq("vendedor_id", user.id)
+
   const [{ data: semanas }, { data: vendedoresRows }] = await Promise.all([
-    supabase.from("v_comisiones_semana")
-      .select("vendedor_id, semana_inicio, ventas_count, base, total, vendedor:vendedor_id ( nombre )")
-      .order("semana_inicio", { ascending: false })
-      .limit(200),
+    queryComisiones,
     esAdmin
       ? supabase.from("profiles").select("id, nombre, comision_pct").eq("activo", true).order("nombre")
       : Promise.resolve({ data: [] as { id: string; nombre: string; comision_pct: number | null }[] }),
@@ -46,11 +52,21 @@ export default async function ComisionesPage() {
           </p>
         </header>
 
+        <AyudaPantalla
+          que="Cuánto le corresponde cobrar a cada vendedor, semana por semana (de lunes a domingo)."
+          cuando="Cuando liquidás las comisiones de la semana que cerró."
+          ojo="La comisión se genera al REGISTRAR la venta, no al cobrarla. Y las ventas canceladas no cuentan para la liquidación."
+          seccion="comisiones"
+        />
+
         {esAdmin && vendedores.length > 0 && (
           <section className="rounded-xl border border-app-line-soft bg-app-card p-5">
             <h2 className="font-display font-semibold mb-3">Porcentaje por vendedor</h2>
             <p className="text-xs text-app-muted mb-3">
-              El override por producto (si existe) tiene prioridad. Sin override, se usa este %.
+              La comisión se calcula producto por producto. Si el producto tiene
+              su propio % cargado en la ficha, gana ese; si no, se usa el % del
+              vendedor de esta lista; y si el vendedor no tiene, el default de
+              Configuración. Por eso una venta puede liquidar a un % promedio.
             </p>
             <ul className="space-y-1">
               {vendedores.map((v) => (
@@ -84,7 +100,11 @@ export default async function ComisionesPage() {
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
-                <TableEmpty colSpan={esAdmin ? 5 : 4}>Sin comisiones registradas.</TableEmpty>
+                <TableEmpty colSpan={esAdmin ? 5 : 4}>
+                  {esAdmin
+                    ? "Todavía no hay comisiones. Se generan solas al registrar una venta, siempre que el vendedor o el producto tengan un porcentaje cargado."
+                    : "Todavía no tenés comisiones. Se generan al registrar una venta, no al cobrarla."}
+                </TableEmpty>
               ) : rows.map((r, idx) => (
                 <TableRow key={`${r.vendedor_id}-${r.semana_inicio}-${idx}`}>
                   <TableCell className="font-mono text-sm text-app-secondary">{formatFecha(r.semana_inicio)}</TableCell>

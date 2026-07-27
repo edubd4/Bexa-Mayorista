@@ -128,6 +128,19 @@ export async function upsertItemLista(input: ListaPrecioItemInput): Promise<Acti
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
+  // Se lee el precio anterior ANTES del upsert para poder dejar el "de cuánto a
+  // cuánto" en el historial. En una distribuidora el precio de lista es
+  // exactamente el dato que uno quiere poder auditar, y estas dos acciones eran
+  // las únicas del archivo que no dejaban rastro (hallazgo 6).
+  const [{ data: lista }, { data: producto }, { data: anterior }] = await Promise.all([
+    supabase.from("listas_precios").select("id_publico, nombre").eq("id", parsed.data.lista_precio_id).maybeSingle(),
+    supabase.from("productos_catalogo").select("id_publico, nombre").eq("id", parsed.data.producto_id).maybeSingle(),
+    supabase.from("listas_precios_items").select("precio")
+      .eq("lista_precio_id", parsed.data.lista_precio_id)
+      .eq("producto_id", parsed.data.producto_id)
+      .maybeSingle(),
+  ])
+
   const { error } = await supabase
     .from("listas_precios_items")
     .upsert(
@@ -136,6 +149,24 @@ export async function upsertItemLista(input: ListaPrecioItemInput): Promise<Acti
     )
   if (error) return { ok: false, error: error.message }
 
+  const precioAnterior = anterior ? Number(anterior.precio) : null
+  await logHistorial(supabase, {
+    tipo: precioAnterior === null ? TIPO_EVENTO.ALTA : TIPO_EVENTO.MODIFICACION,
+    descripcion:
+      precioAnterior === null
+        ? `Precio de ${producto?.id_publico ?? "producto"} en lista ${lista?.id_publico ?? ""}: ${parsed.data.precio}`
+        : `Precio de ${producto?.id_publico ?? "producto"} en lista ${lista?.id_publico ?? ""}: ${precioAnterior} → ${parsed.data.precio}`,
+    entidadTipo: "lista_precio",
+    entidadId: lista?.id_publico ?? parsed.data.lista_precio_id,
+    payload: {
+      producto_id_publico: producto?.id_publico ?? null,
+      producto_nombre: producto?.nombre ?? null,
+      precio_anterior: precioAnterior,
+      precio_nuevo: parsed.data.precio,
+    },
+    userId: user.id,
+  })
+
   revalidatePath(`${RUTA}/${parsed.data.lista_precio_id}`)
   return { ok: true }
 }
@@ -143,10 +174,38 @@ export async function upsertItemLista(input: ListaPrecioItemInput): Promise<Acti
 export async function removeItemLista(listaId: string, itemId: string): Promise<ActionResult> {
   const guard = await requireAdmin()
   if (!guard.ok) return { ok: false, error: guard.error }
-  const { supabase } = guard
+  const { supabase, user } = guard
+
+  // Igual que arriba: hay que leer antes de borrar, si no el historial queda
+  // con "se borró algo" y sin decir qué.
+  const { data: item } = await supabase
+    .from("listas_precios_items")
+    .select("precio, producto_id")
+    .eq("id", itemId)
+    .maybeSingle()
+
+  const [{ data: lista }, { data: producto }] = await Promise.all([
+    supabase.from("listas_precios").select("id_publico").eq("id", listaId).maybeSingle(),
+    item
+      ? supabase.from("productos_catalogo").select("id_publico, nombre").eq("id", item.producto_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
 
   const { error } = await supabase.from("listas_precios_items").delete().eq("id", itemId)
   if (error) return { ok: false, error: error.message }
+
+  await logHistorial(supabase, {
+    tipo: TIPO_EVENTO.BAJA,
+    descripcion: `Se quitó ${producto?.id_publico ?? "un producto"} de la lista ${lista?.id_publico ?? ""}. Vuelve a usar el precio base.`,
+    entidadTipo: "lista_precio",
+    entidadId: lista?.id_publico ?? listaId,
+    payload: {
+      producto_id_publico: producto?.id_publico ?? null,
+      producto_nombre: producto?.nombre ?? null,
+      precio_que_tenia: item ? Number(item.precio) : null,
+    },
+    userId: user.id,
+  })
 
   revalidatePath(`${RUTA}/${listaId}`)
   return { ok: true }

@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Plus, Search } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { LinkRow } from "@/components/ui/link-row"
@@ -61,7 +62,10 @@ export default async function VentasPage({
 
   const esAdmin = profile.rol === ROL.ADMIN
 
-  // RLS filtra: vendedor ve solo las suyas.
+  // El vendedor ve SOLO sus ventas. Se filtra en dos lugares a propósito:
+  // acá (explícito) y en la RLS de `ventas`, que la vista respeta desde la
+  // 0016. Defensa en profundidad — si mañana alguien afloja una policy, esta
+  // pantalla sigue sin filtrar de más.
   let query = supabase
     .from("v_ventas_lista")
     .select(`
@@ -73,6 +77,8 @@ export default async function VentasPage({
     `)
     .order("fecha", { ascending: false })
     .limit(200)
+
+  if (!esAdmin) query = query.eq("vendedor_id", user.id)
 
   if (searchParams.cobro && ["PENDIENTE", "PARCIAL", "COBRADA", "CANCELADA"].includes(searchParams.cobro)) {
     query = query.eq("estado_cobro", searchParams.cobro)
@@ -111,6 +117,13 @@ export default async function VentasPage({
             </Link>
           </Button>
         </header>
+
+        <AyudaPantalla
+          que="Todas las ventas registradas, con su estado de cobro y de entrega. Desde acá registrás una venta nueva y entrás a cobrar las que quedaron pendientes."
+          cuando="Cada vez que le vendés algo a alguien, en el momento. Y cuando un cliente viene a pagarte algo que se había llevado con saldo."
+          ojo="Registrar la venta descuenta el stock enseguida, pero NO entra la plata a la caja. La plata entra recién cuando cobrás la venta."
+          seccion="registrar-venta"
+        />
 
         {/* Filtros */}
         <form action={ent.ruta} method="get" className="flex flex-wrap items-center gap-2">
@@ -165,7 +178,11 @@ export default async function VentasPage({
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
-                <TableEmpty colSpan={esAdmin ? 8 : 7}>Sin ventas todavía.</TableEmpty>
+                <TableEmpty colSpan={esAdmin ? 8 : 7}>
+                  {q.length >= 2 || searchParams.cobro || searchParams.entrega
+                    ? "Ninguna venta coincide con estos filtros. Probá sacando alguno."
+                    : "Todavía no hay ventas registradas. Registrá una con el botón de arriba: se descuenta el stock y se genera la comisión sola."}
+                </TableEmpty>
               ) : (
                 rows.map((v) => (
                   <LinkRow key={v.id} href={`${ent.ruta}/${v.id}`}>

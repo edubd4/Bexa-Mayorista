@@ -45,6 +45,12 @@ export const ENTIDAD_TIPO_LABEL: Record<string, string> = {
   compra:           DOMINIO.compras.singular,
   gasto:            DOMINIO.gastos.singular,
   movimiento_caja:  "Movimiento de caja",
+  // El módulo campañas venía logueando con entidad_tipo 'campana' desde la 0011
+  // pero nunca se registró acá: en /historial se veía el string crudo y no
+  // había chip de filtro.
+  campana:              DOMINIO.campanas.singular,
+  campana_publicacion:  "Publicación de campaña",
+  categoria_gasto:      "Categoría de gasto",
 }
 
 // Link a la entidad desde el historial. Los módulos cosechados registran su
@@ -57,7 +63,9 @@ export const ENTIDAD_TIPO_RUTA: Record<string, string> = {
   venta:     DOMINIO.ventas.ruta,
   compra:    DOMINIO.compras.ruta,
   gasto:     DOMINIO.gastos.ruta,
-  // movimiento_caja, lista_precio, regla_descuento se filtran por texto en /historial.
+  campana:   DOMINIO.campanas.ruta,
+  // movimiento_caja, lista_precio, regla_descuento, campana_publicacion y
+  // categoria_gasto no tienen listado propio buscable: se filtran por texto.
 }
 
 export function linkEntidad(tipo: string | null, id: string | null): string | null {

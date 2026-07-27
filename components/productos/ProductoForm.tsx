@@ -23,6 +23,10 @@ type Props = {
   proveedores: { id: string; nombre: string; id_publico: string }[]
   categoriasExistentes: string[]
   marcasExistentes: string[]
+  // La comisión por producto la define SOLO el admin. Cuando es false, el campo
+  // ni se renderiza y el valor no viaja: el RPC del vendedor no lo acepta como
+  // parámetro. Ver 0017.
+  mostrarComision?: boolean
 }
 
 const DEFAULTS: ProductoInput = {
@@ -46,6 +50,7 @@ export function ProductoForm({
   proveedores,
   categoriasExistentes,
   marcasExistentes,
+  mostrarComision = true,
 }: Props) {
   const router = useRouter()
   const toast = useToast()
@@ -181,8 +186,10 @@ export function ProductoForm({
       </section>
 
       <section className="rounded-xl border border-app-line-soft bg-app-card p-6 space-y-5">
-        <h2 className="font-display text-lg font-semibold">Precio y comisión</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <h2 className="font-display text-lg font-semibold">
+          {mostrarComision ? "Precio y comisión" : "Costo y precio"}
+        </h2>
+        <div className={`grid grid-cols-1 gap-4 ${mostrarComision ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
           <div className="space-y-2">
             <Label htmlFor="costo">Costo</Label>
             <MoneyInput
@@ -192,8 +199,9 @@ export function ProductoForm({
               onChange={(v) => update("costo", v ?? 0)}
             />
             <p className="text-[11px] text-app-muted font-mono">
-              Solo lo ve el admin. Es un dato del catálogo — NO registra plata en
-              caja. Para comprar mercadería con plata usá Compras.
+              {mostrarComision
+                ? "Es un dato del catálogo — NO registra plata en caja. Para comprar mercadería con plata usá Compras."
+                : "Cuánto te salió a vos este producto. Lo cargás ahora y después no vuelve a mostrarse: los costos del catálogo los ve solo el admin. Cargarlo acá NO mueve plata de la caja."}
             </p>
           </div>
           <div className="space-y-2">
@@ -208,19 +216,23 @@ export function ProductoForm({
               Se usa si el cliente no tiene lista asignada.
             </p>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="comision_pct">Comisión override (%)</Label>
-            <NumberInput
-              id="comision_pct"
-              decimals={2}
-              value={form.comision_pct ?? null}
-              onChange={(v) => update("comision_pct", v ?? undefined)}
-              placeholder="Usar la del vendedor"
-            />
-            <p className="text-[11px] text-app-muted font-mono">
-              Vacío = comisión del vendedor. Solo lo ve el admin.
-            </p>
-          </div>
+          {mostrarComision && (
+            <div className="space-y-2">
+              <Label htmlFor="comision_pct">Comisión override (%)</Label>
+              <NumberInput
+                id="comision_pct"
+                decimals={2}
+                value={form.comision_pct ?? null}
+                onChange={(v) => update("comision_pct", v ?? undefined)}
+                placeholder="Usar la del vendedor"
+              />
+              <p className="text-[11px] text-app-muted font-mono">
+                Vacío = se usa el % del vendedor. Si cargás un número acá, este
+                producto paga ESE % a cualquier vendedor que lo venda. Aplica a
+                las ventas nuevas; las ya registradas no cambian.
+              </p>
+            </div>
+          )}
         </div>
       </section>
 

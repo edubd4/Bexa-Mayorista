@@ -74,6 +74,14 @@ export async function createCategoriaGasto(input: CategoriaGastoInput): Promise<
     .insert({ ...parsed.data, created_by: user.id, updated_by: user.id })
   if (error) return { ok: false, error: error.message }
 
+  await logHistorial(supabase, {
+    tipo: TIPO_EVENTO.ALTA,
+    descripcion: `Categoría de gasto · ${parsed.data.nombre}`,
+    entidadTipo: "categoria_gasto",
+    entidadId: parsed.data.nombre,
+    userId: user.id,
+  })
+
   revalidatePath("/configuracion/categorias-gasto")
   return { ok: true }
 }
@@ -85,16 +93,26 @@ export async function toggleCategoriaGastoActivo(id: number): Promise<ActionResu
 
   const { data: current } = await supabase
     .from("categorias_gasto")
-    .select("activo")
+    .select("activo, nombre")
     .eq("id", id)
     .maybeSingle()
   if (!current) return { ok: false, error: "Categoría no encontrada" }
 
+  const nuevo = !current.activo
   const { error } = await supabase
     .from("categorias_gasto")
-    .update({ activo: !current.activo, updated_by: user.id })
+    .update({ activo: nuevo, updated_by: user.id })
     .eq("id", id)
   if (error) return { ok: false, error: error.message }
+
+  await logHistorial(supabase, {
+    tipo: nuevo ? TIPO_EVENTO.MODIFICACION : TIPO_EVENTO.BAJA,
+    descripcion: `Categoría de gasto ${current.nombre} ${nuevo ? "reactivada" : "desactivada"}`,
+    entidadTipo: "categoria_gasto",
+    entidadId: current.nombre,
+    payload: { activo_anterior: current.activo, activo_nuevo: nuevo },
+    userId: user.id,
+  })
 
   revalidatePath("/configuracion/categorias-gasto")
   return { ok: true }

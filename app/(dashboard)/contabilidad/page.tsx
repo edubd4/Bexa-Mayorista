@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Download } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -98,6 +99,12 @@ export default async function ContabilidadPage({
           </Button>
         </header>
 
+        <AyudaPantalla
+          que="El resumen del mes en números, y la exportación en CSV para pasarle al contador."
+          cuando="A fin de mes, cuando armás lo que va al estudio contable."
+          seccion="cerrar-el-dia"
+        />
+
         {/* Filtro de período */}
         <div className="flex flex-wrap items-center gap-2">
           <PresetLink current={periodo.preset} value="mes" label="Mes actual" />
@@ -137,7 +144,9 @@ export default async function ContabilidadPage({
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
-                <TableEmpty colSpan={6}>Sin movimientos en el período.</TableEmpty>
+                <TableEmpty colSpan={6}>
+                  Sin movimientos en el período elegido. Probá con otro mes.
+                </TableEmpty>
               ) : rows.map((m) => (
                 <TableRow key={m.id}>
                   <TableCell className="font-mono text-app-accent text-xs">

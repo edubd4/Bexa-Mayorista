@@ -3,7 +3,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { requireAuthenticated } from "@/lib/auth-guards"
+// Las campañas las gestiona marketing (y el admin). El vendedor las lee desde
+// las pantallas, pero ninguna de estas acciones le corresponde. Antes las 6
+// usaban requireAuthenticated (sin mirar rol) y la RLS era FOR ALL a cualquier
+// autenticado: un vendedor podía crear, editar presupuesto y borrar
+// publicaciones. Ver 0017.
+import { requireGestionCampanas } from "@/lib/auth-guards"
 import { TIPO_EVENTO } from "@/lib/constants"
 import { DOMINIO } from "@/lib/dominio"
 import { logHistorial } from "@/lib/historial"
@@ -44,7 +49,7 @@ export async function createCampana(input: CampanaInput): Promise<ActionResult> 
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
 
-  const guard = await requireAuthenticated()
+  const guard = await requireGestionCampanas()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
@@ -88,7 +93,7 @@ export async function updateCampana(id: string, input: CampanaInput): Promise<Ac
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
 
-  const guard = await requireAuthenticated()
+  const guard = await requireGestionCampanas()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
@@ -128,7 +133,7 @@ export async function cambiarEstadoManual(
   id: string,
   estado: EstadoCampanaManual | null,
 ): Promise<ActionResult> {
-  const guard = await requireAuthenticated()
+  const guard = await requireGestionCampanas()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
@@ -169,16 +174,27 @@ export async function updateMetricasManuales(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
 
-  const guard = await requireAuthenticated()
+  const guard = await requireGestionCampanas()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("campanas")
     .update({ metricas_manuales: parsed.data, updated_by: user.id })
     .eq("id", id)
+    .select("id_publico")
+    .single()
 
-  if (error) return { ok: false, error: error.message }
+  if (error || !data) return { ok: false, error: error?.message ?? "No se pudo guardar" }
+
+  await logHistorial(supabase, {
+    tipo: TIPO_EVENTO.MODIFICACION,
+    descripcion: `Métricas de la campaña ${data.id_publico} actualizadas`,
+    entidadTipo: "campana",
+    entidadId: data.id_publico,
+    payload: parsed.data,
+    userId: user.id,
+  })
 
   revalidatePath(`${DOMINIO.campanas.ruta}/${id}`)
   return { ok: true }
@@ -191,17 +207,26 @@ export async function crearPublicacion(input: PublicacionInput): Promise<ActionR
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
 
-  const guard = await requireAuthenticated()
+  const guard = await requireGestionCampanas()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
-  const { error } = await supabase.from("campana_publicaciones").insert({
-    ...parsed.data,
-    created_by: user.id,
-    updated_by: user.id,
-  })
+  const { data, error } = await supabase
+    .from("campana_publicaciones")
+    .insert({ ...parsed.data, created_by: user.id, updated_by: user.id })
+    .select("id_publico")
+    .single()
 
-  if (error) return { ok: false, error: error.message }
+  if (error || !data) return { ok: false, error: error?.message ?? "No se pudo crear la publicación" }
+
+  await logHistorial(supabase, {
+    tipo: TIPO_EVENTO.ALTA,
+    descripcion: `Publicación ${data.id_publico}${parsed.data.titulo ? ` · ${parsed.data.titulo}` : ""}`,
+    entidadTipo: "campana_publicacion",
+    entidadId: data.id_publico,
+    payload: { campana_id: parsed.data.campana_id, estado: parsed.data.estado },
+    userId: user.id,
+  })
 
   revalidatePath(`${DOMINIO.campanas.ruta}/${parsed.data.campana_id}`)
   return { ok: true }
@@ -211,13 +236,31 @@ export async function actualizarPublicacion(
   id: string,
   input: Partial<PublicacionInput>,
 ): Promise<ActionResult> {
-  const guard = await requireAuthenticated()
+  // Era la única de las 41 server actions sin Zod: hacía spread del input crudo,
+  // así que desde un cliente manipulado se podía escribir cualquier columna de
+  // campana_publicaciones — campana_id incluido, moviendo la publicación a otra
+  // campaña. Hallazgo 5 de la auditoría.
+  const parsed = publicacionSchema.partial().safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
+  }
+
+  // Lista blanca explícita en vez de "todo menos campana_id": si mañana el
+  // schema suma un campo, no se cuela solo en el update. `campana_id` queda
+  // afuera a propósito — una publicación no se muda de campaña por esta vía.
+  const campos: Record<string, unknown> = {}
+  const EDITABLES = ["canal_id", "titulo", "cuerpo", "fecha_publicacion", "estado"] as const
+  for (const k of EDITABLES) {
+    if (parsed.data[k] !== undefined) campos[k] = parsed.data[k]
+  }
+
+  const guard = await requireGestionCampanas()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
   const { data, error } = await supabase
     .from("campana_publicaciones")
-    .update({ ...input, updated_by: user.id })
+    .update({ ...campos, updated_by: user.id })
     .eq("id", id)
     .select("campana_id")
     .single()
@@ -229,19 +272,31 @@ export async function actualizarPublicacion(
 }
 
 export async function borrarPublicacion(id: string): Promise<ActionResult> {
-  const guard = await requireAuthenticated()
+  const guard = await requireGestionCampanas()
   if (!guard.ok) return { ok: false, error: guard.error }
-  const { supabase } = guard
+  const { supabase, user } = guard
 
+  // Es un DELETE de verdad, no un soft delete: sin este registro previo no
+  // queda ningún rastro de qué se borró ni de quién lo borró.
   const { data: pub } = await supabase
     .from("campana_publicaciones")
-    .select("campana_id")
+    .select("campana_id, id_publico, titulo, cuerpo, estado")
     .eq("id", id)
     .single()
 
   const { error } = await supabase.from("campana_publicaciones").delete().eq("id", id)
   if (error) return { ok: false, error: error.message }
 
-  if (pub) revalidatePath(`${DOMINIO.campanas.ruta}/${pub.campana_id}`)
+  if (pub) {
+    await logHistorial(supabase, {
+      tipo: TIPO_EVENTO.BAJA,
+      descripcion: `Publicación ${pub.id_publico} borrada${pub.titulo ? ` · ${pub.titulo}` : ""}`,
+      entidadTipo: "campana_publicacion",
+      entidadId: pub.id_publico,
+      payload: { campana_id: pub.campana_id, estado: pub.estado, cuerpo: pub.cuerpo },
+      userId: user.id,
+    })
+    revalidatePath(`${DOMINIO.campanas.ruta}/${pub.campana_id}`)
+  }
   return { ok: true }
 }

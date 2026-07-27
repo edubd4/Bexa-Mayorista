@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Plus, Search, Calendar } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Button } from "@/components/ui/button"
 import { LinkRow } from "@/components/ui/link-row"
 import {
@@ -9,6 +10,7 @@ import {
 } from "@/components/ui/table"
 import { CampanaEstadoBadge } from "@/components/campanas/CampanaEstadoBadge"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
+import { puedeGestionarCampanas } from "@/lib/permisos"
 import { formatFecha, formatPesos } from "@/lib/utils"
 import type { EstadoCampanaEfectivo } from "@/lib/validators/campana"
 
@@ -38,6 +40,9 @@ export default async function CampanasPage({
   const { data: profile } = await supabase
     .from("profiles").select("rol, activo").eq("id", user.id).single()
   if (!profile?.activo) redirect("/login")
+
+  // El vendedor entra a mirar qué se está promocionando. No crea campañas.
+  const puedeGestionar = puedeGestionarCampanas(profile.rol)
 
   const q = (searchParams.q ?? "").trim()
   const estadoFilter = searchParams.estado ?? "todos"
@@ -81,14 +86,23 @@ export default async function CampanasPage({
                 Calendario
               </Link>
             </Button>
-            <Button asChild>
-              <Link href={`${ent.ruta}/nueva`}>
-                <Plus className="w-4 h-4" />
-                {nuevoLabel(ent)}
-              </Link>
-            </Button>
+            {puedeGestionar && (
+              <Button asChild>
+                <Link href={`${ent.ruta}/nueva`}>
+                  <Plus className="w-4 h-4" />
+                  {nuevoLabel(ent)}
+                </Link>
+              </Button>
+            )}
           </div>
         </header>
+
+        <AyudaPantalla
+          que="Las campañas de marketing: qué se está promocionando, en qué canales, con qué presupuesto y qué ventas trajo."
+          cuando="Si sos del área de marketing, para armar y seguir tus campañas. Si sos vendedor, para saber qué se está promocionando antes de atender."
+          ojo="Las campañas las crea y las edita el área de marketing. El vendedor las mira pero no las toca."
+          seccion="campanas"
+        />
 
         <form action={ent.ruta} method="get" className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">

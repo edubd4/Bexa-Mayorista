@@ -10,6 +10,7 @@ import { MetricasCard } from "@/components/campanas/MetricasCard"
 import { MetricasManualesForm } from "@/components/campanas/MetricasManualesForm"
 import { PublicacionesManager } from "@/components/campanas/PublicacionesManager"
 import { DOMINIO } from "@/lib/dominio"
+import { puedeGestionarCampanas } from "@/lib/permisos"
 import { formatFecha, formatPesos } from "@/lib/utils"
 import type {
   EstadoCampanaEfectivo,
@@ -44,6 +45,10 @@ export default async function CampanaDetalle({ params }: Params) {
   const { data: profile } = await supabase
     .from("profiles").select("rol, activo").eq("id", user.id).single()
   if (!profile?.activo) redirect("/login")
+
+  // El vendedor lee la ficha completa (necesita saber qué se promociona y con
+  // qué productos para vender), pero no ve ningún control que la modifique.
+  const puedeGestionar = puedeGestionarCampanas(profile.rol)
 
   const [{ data: campanaRaw }, { data: canalesTodos }] = await Promise.all([
     supabase.from("v_campanas").select("*").eq("id", params.id).maybeSingle(),
@@ -122,39 +127,45 @@ export default async function CampanaDetalle({ params }: Params) {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" asChild>
-              <Link href={`${ent.ruta}/${campana.id}/edit`}>
-                <Pencil className="w-3.5 h-3.5" /> Editar
-              </Link>
-            </Button>
+            {puedeGestionar && (
+              <Button variant="outline" asChild>
+                <Link href={`${ent.ruta}/${campana.id}/edit`}>
+                  <Pencil className="w-3.5 h-3.5" /> Editar
+                </Link>
+              </Button>
+            )}
           </div>
         </header>
 
         {/* Estados manuales */}
-        <section className="rounded-xl border border-app-line-soft bg-app-card p-5">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-            <div>
-              <h2 className="font-display font-semibold">Estado de la campaña</h2>
-              <p className="text-xs text-app-muted mt-1">
-                Sistema calcula PROGRAMADA/ACTIVA/CONCLUIDA por fecha. Vos podés PAUSAR o CANCELAR.
-              </p>
+        {puedeGestionar && (
+          <section className="rounded-xl border border-app-line-soft bg-app-card p-5">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <h2 className="font-display font-semibold">Estado de la campaña</h2>
+                <p className="text-xs text-app-muted mt-1">
+                  Sistema calcula PROGRAMADA/ACTIVA/CONCLUIDA por fecha. Vos podés PAUSAR o CANCELAR.
+                </p>
+              </div>
+              <CambiarEstadoButtons
+                campanaId={campana.id}
+                estadoEfectivo={campana.estado_efectivo}
+                estadoManual={campana.estado_manual}
+              />
             </div>
-            <CambiarEstadoButtons
-              campanaId={campana.id}
-              estadoEfectivo={campana.estado_efectivo}
-              estadoManual={campana.estado_manual}
-            />
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* Métricas */}
         <section className="space-y-3">
           <h2 className="font-display text-xl font-semibold">Métricas</h2>
           <MetricasCard metricas={metricas} />
-          <div className="rounded-xl border border-app-line-soft bg-app-card p-5">
-            <h3 className="font-display font-semibold text-base mb-3">Métricas manuales (redes)</h3>
-            <MetricasManualesForm campanaId={campana.id} initial={campana.metricas_manuales ?? {}} />
-          </div>
+          {puedeGestionar && (
+            <div className="rounded-xl border border-app-line-soft bg-app-card p-5">
+              <h3 className="font-display font-semibold text-base mb-3">Métricas manuales (redes)</h3>
+              <MetricasManualesForm campanaId={campana.id} initial={campana.metricas_manuales ?? {}} />
+            </div>
+          )}
         </section>
 
         {/* Descripción + gasto asociado */}
@@ -227,6 +238,7 @@ export default async function CampanaDetalle({ params }: Params) {
             campanaId={campana.id}
             canales={canalesTodos ?? []}
             publicaciones={publicaciones}
+            soloLectura={!puedeGestionar}
           />
         </section>
       </div>

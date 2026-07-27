@@ -3,8 +3,8 @@ import { redirect } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { ProductoForm } from "@/components/productos/ProductoForm"
-import { ROL } from "@/lib/constants"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
+import { puedeCargarProductos, puedeVerCostos } from "@/lib/permisos"
 
 export default async function NuevoProductoPage() {
   const supabase = await createServerClient()
@@ -16,9 +16,11 @@ export default async function NuevoProductoPage() {
     .select("rol, activo")
     .eq("id", user.id)
     .single()
-  if (profile?.rol !== ROL.ADMIN || !profile.activo) {
+  // Admin y vendedor cargan productos; marketing no (0017).
+  if (!profile?.activo || !puedeCargarProductos(profile.rol)) {
     redirect(DOMINIO.productos.ruta)
   }
+  const mostrarComision = puedeVerCostos(profile.rol)
 
   const [{ data: proveedores }, { data: catRows }, { data: marcaRows }] = await Promise.all([
     supabase
@@ -74,6 +76,7 @@ export default async function NuevoProductoPage() {
 
         <ProductoForm
           mode="create"
+          mostrarComision={mostrarComision}
           proveedores={(proveedores ?? []) as { id: string; id_publico: string; nombre: string }[]}
           categoriasExistentes={categoriasExistentes}
           marcasExistentes={marcasExistentes}

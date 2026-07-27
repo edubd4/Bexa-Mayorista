@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Plus } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableEmpty } from "@/components/ui/table"
@@ -65,6 +66,13 @@ export default async function UsuariosPage() {
             </Link>
           </Button>
         </header>
+
+        <AyudaPantalla
+          que="Las personas que entran al sistema, con su rol y su porcentaje de comisión."
+          cuando="Cuando entra alguien nuevo al equipo, cuando alguien se va (se desactiva, no se borra) o cuando cambia un porcentaje de comisión."
+          ojo="Nunca compartas una cuenta entre dos personas. Si dos empleados usan el mismo usuario, las ventas, las comisiones y el historial dejan de significar algo."
+          seccion="usuarios"
+        />
 
         {error ? (
           <div className="rounded-md border border-app-red/40 bg-app-red/10 px-4 py-3 text-sm text-app-red">

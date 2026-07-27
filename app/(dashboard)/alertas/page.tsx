@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { AlertTriangle, Package, TrendingDown, Clock } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Badge } from "@/components/ui/badge"
 import {
   Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow,
@@ -49,6 +50,13 @@ export default async function AlertasPage() {
             <Link href="/configuracion" className="underline hover:text-app-accent">Configuración</Link>.
           </p>
         </header>
+
+        <AyudaPantalla
+          que="Las tres cosas que necesitan que hagas algo hoy: productos por debajo del stock mínimo, saldos que se están haciendo viejos y entregas que quedaron trabadas."
+          cuando="Todos los días al empezar. Si está vacío, no tenés nada urgente pendiente."
+          ojo="Un producto solo aparece en stock bajo si tiene cargado un stock mínimo distinto de cero. Si nunca se lo pusiste, nunca te va a avisar."
+          seccion="iniciar-el-dia"
+        />
 
         {/* Stock bajo */}
         <section className="rounded-xl border border-app-line-soft bg-app-card overflow-hidden">

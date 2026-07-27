@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Plus } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Button } from "@/components/ui/button"
 import { LinkRow } from "@/components/ui/link-row"
 import {
@@ -74,6 +75,13 @@ export default async function GastosPage() {
           </Button>
         </header>
 
+        <AyudaPantalla
+          que="Todo lo que gastás y no es mercadería: alquiler, sueldos, fletes, servicios. Cada gasto que cargás sale automáticamente de la caja."
+          cuando="El mismo día que pagás el gasto. Si lo dejás para después, el cierre de caja de ese día no te va a cuadrar."
+          ojo="Para comprar mercadería NO uses Gastos: usá Compras, que además te sube el stock. Gastos es para lo que no entra al depósito."
+          seccion="caja-y-gastos"
+        />
+
         <div className="rounded-xl border border-app-line-soft bg-app-card overflow-hidden">
           <Table>
             <TableHeader>
@@ -88,7 +96,11 @@ export default async function GastosPage() {
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
-                <TableEmpty colSpan={6}>Sin gastos todavía.</TableEmpty>
+                <TableEmpty colSpan={6}>
+                  Sin gastos cargados. Acá va todo lo que pagás y no es
+                  mercadería: alquiler, sueldos, fletes, servicios. Para
+                  mercadería usá Compras.
+                </TableEmpty>
               ) : (
                 rows.map((g) => (
                   <LinkRow key={g.id} href={`${DOMINIO.caja.ruta}?q=${g.id_publico}`}>

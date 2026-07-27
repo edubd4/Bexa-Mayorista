@@ -1,11 +1,16 @@
 import type { createServerClient } from "@/lib/supabase/server"
 import type { IconKey } from "@/lib/nav"
 import { DOMINIO } from "@/lib/dominio"
+import { SECCIONES } from "@/lib/manual/contenido"
 
 // ============================================================================
 // Registry de fuentes de búsqueda global (server-side, consumido por /api/search).
 // Cosechar un módulo = agregar UNA entrada acá. El CommandPalette no se toca.
-// RLS filtra: cada rol ve solo lo que sus policies permiten.
+//
+// La RLS filtra por rol, pero el buscador NO se apoya solo en eso: cada fuente
+// que devuelve datos de alcance restringido recibe el `SearchCtx` y filtra
+// explícitamente. Defensa en profundidad — el Ctrl+K es la puerta más fácil de
+// olvidar cuando se toca una policy.
 // ============================================================================
 
 export type SearchResult = {
@@ -17,7 +22,13 @@ export type SearchResult = {
 
 type Supabase = Awaited<ReturnType<typeof createServerClient>>
 
-type SearchSource = (supabase: Supabase, like: string) => Promise<SearchResult[]>
+// Quién está buscando. Lo arma /api/search a partir del profile.
+export type SearchCtx = {
+  userId: string
+  esAdmin: boolean
+}
+
+type SearchSource = (supabase: Supabase, like: string, ctx: SearchCtx) => Promise<SearchResult[]>
 
 // ─── Core: usuarios (RLS: admin ve todos; colaborador solo su perfil) ────────
 const buscarUsuarios: SearchSource = async (supabase, like) => {
@@ -66,7 +77,10 @@ const buscarClientes: SearchSource = async (supabase, like) => {
   })
 }
 
-// ─── Productos (usa vista SIN costos — no filtramos por rol, la vista es segura) ─
+// ─── Productos ──────────────────────────────────────────────────────────────
+// Usa `productos_catalogo`, que NO trae costo ni comision_pct. Acá no hace
+// falta filtrar por rol: el catálogo es visible para todos a propósito (el
+// vendedor lo necesita para vender). Ver la nota de esa vista en la 0016.
 const buscarProductos: SearchSource = async (supabase, like) => {
   const { data } = await supabase
     .from("productos_catalogo")
@@ -112,14 +126,17 @@ const buscarProveedores: SearchSource = async (supabase, like) => {
   }))
 }
 
-// ─── Ventas (RLS: admin ve todas; vendedor solo las suyas) ───────────────────
-const buscarVentas: SearchSource = async (supabase, like) => {
-  const { data } = await supabase
+// ─── Ventas — el admin busca todas; el vendedor solo las suyas ──────────────
+// Filtro explícito + RLS de `ventas` (que la vista respeta desde la 0016).
+const buscarVentas: SearchSource = async (supabase, like, ctx) => {
+  let query = supabase
     .from("v_ventas_lista")
     .select("id, id_publico, total, estado_cobro, estado_entrega")
     .ilike("id_publico", like)
     .order("fecha", { ascending: false })
     .limit(5)
+  if (!ctx.esAdmin) query = query.eq("vendedor_id", ctx.userId)
+  const { data } = await query
   return (data ?? []).map((v) => ({
     href: `${DOMINIO.ventas.ruta}/${v.id}`,
     label: `${v.id_publico}`,
@@ -159,8 +176,31 @@ const buscarCampanas: SearchSource = async (supabase, like) => {
   }))
 }
 
+// ─── Manual de usuario (contenido estático, sin DB) ──────────────────────────
+// El filtrado por rol se hace en la propia página de la sección; acá devolvemos
+// las secciones cuyo título o resumen matchea, para que el empleado llegue a la
+// respuesta desde el mismo Ctrl+K con el que busca todo lo demás.
+// No recibe `ctx`: el manual no depende del rol acá — cada sección filtra por
+// rol en su propia página. TS permite declarar menos parámetros de los que la
+// firma ofrece.
+const buscarManual: SearchSource = async (_supabase, like) => {
+  const q = like.replaceAll("%", "").toLowerCase()
+  if (q.length < 2) return []
+  return SECCIONES.filter(
+    (s) => s.titulo.toLowerCase().includes(q) || s.resumen.toLowerCase().includes(q),
+  )
+    .slice(0, 4)
+    .map((s) => ({
+      href: `/manual/${s.slug}`,
+      label: s.titulo,
+      sub: `Manual · ${s.categoria} · ${s.minutos} min`,
+      iconKey: "GraduationCap" as const,
+    }))
+}
+
 // Los módulos cosechados agregan su fuente acá (clientes, ventas, ...).
 const SOURCES: SearchSource[] = [
+  buscarManual,
   buscarCompras,
   buscarVentas,
   buscarUsuarios,
@@ -170,8 +210,12 @@ const SOURCES: SearchSource[] = [
   buscarCampanas,
 ]
 
-export async function buscarGlobal(supabase: Supabase, q: string): Promise<SearchResult[]> {
+export async function buscarGlobal(
+  supabase: Supabase,
+  q: string,
+  ctx: SearchCtx,
+): Promise<SearchResult[]> {
   const like = `%${q}%`
-  const resultados = await Promise.all(SOURCES.map((fn) => fn(supabase, like)))
+  const resultados = await Promise.all(SOURCES.map((fn) => fn(supabase, like, ctx)))
   return resultados.flat()
 }

@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Search, TrendingDown, TrendingUp, Wallet } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ROL } from "@/lib/constants"
@@ -117,6 +118,13 @@ export default async function CajaPage({
           </div>
         </header>
 
+        <AyudaPantalla
+          que="El dinero que entra y sale, movimiento por movimiento. El saldo que ves acá es lo que el sistema dice que tenés."
+          cuando="Al cerrar el día, para comparar este saldo contra la plata que tenés físicamente en la caja."
+          ojo="Los movimientos de caja no se editan ni se borran nunca. Si algo quedó mal cargado, se corrige con otro movimiento que lo compense, y así queda explicado en el historial."
+          seccion="caja-y-gastos"
+        />
+
         {/* KPIs de caja */}
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <KPI icon={<Wallet className="w-4 h-4" />} label="Saldo actual" value={formatPesos(saldo)} tone="accent" />
@@ -175,7 +183,10 @@ export default async function CajaPage({
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
-                <TableEmpty colSpan={6}>Sin movimientos con esos filtros.</TableEmpty>
+                <TableEmpty colSpan={6}>
+                  Sin movimientos con esos filtros. La plata entra a la caja
+                  cuando cobrás una venta, y sale cuando cargás un gasto.
+                </TableEmpty>
               ) : (
                 rows.map((m) => (
                   <TableRow key={m.id}>

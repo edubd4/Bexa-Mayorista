@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { TrendingUp, TrendingDown, Wallet } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Badge } from "@/components/ui/badge"
 import {
   Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow,
@@ -56,6 +57,12 @@ export default async function FinanzasPage() {
             Por cobrar y ganancia real por venta (total − costo snapshot).
           </p>
         </header>
+
+        <AyudaPantalla
+          que="La foto de la plata: qué te deben, qué ya cobraste y cuánta ganancia real dejó cada venta después de descontar los costos."
+          cuando="Una vez por semana, para ver quién te debe hace mucho y salir a cobrar antes de que se haga viejo."
+          ojo="La ganancia que ves acá depende de que los costos de los productos estén bien cargados. Un producto con costo en cero se muestra como ganancia pura, y es mentira."
+        />
 
         {/* KPIs de tesorería */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -130,7 +137,11 @@ export default async function FinanzasPage() {
             </TableHeader>
             <TableBody>
               {ganancias.length === 0 ? (
-                <TableEmpty colSpan={6}>Sin ventas cerradas para calcular ganancia.</TableEmpty>
+                <TableEmpty colSpan={6}>
+                  Sin ventas para calcular ganancia. La ganancia es el total de
+                  la venta menos el costo de los productos, así que necesita que
+                  los productos tengan el costo cargado.
+                </TableEmpty>
               ) : ganancias.map((g) => {
                 const margen = Number(g.total) > 0 ? (Number(g.ganancia) / Number(g.total)) * 100 : 0
                 return (

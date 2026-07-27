@@ -243,7 +243,18 @@ export default async function ProductoDetallePage({ params }: { params: Params }
             </p>
           </div>
 
-          <MovimientoStockForm productoId={producto.id} stockActual={producto.stock_actual} />
+          {/* Solo admin. El fix E de la 0014 dejó la policy de INSERT en
+              admin-only; el form estaba fuera del bloque `esAdmin` y el
+              vendedor lo veía, lo completaba y recibía un error crudo de
+              Postgres al guardar. */}
+          {esAdmin ? (
+            <MovimientoStockForm productoId={producto.id} stockActual={producto.stock_actual} />
+          ) : (
+            <p className="text-xs text-app-muted font-mono">
+              Los movimientos de stock los registra el admin. Si contaste una
+              diferencia, avisale para que la ajuste.
+            </p>
+          )}
 
           <div className="border-t border-app-line-soft pt-3">
             {movimientos.length === 0 ? (

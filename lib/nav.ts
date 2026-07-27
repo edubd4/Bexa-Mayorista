@@ -24,6 +24,7 @@ export type IconKey =
   | "ScrollText"
   | "Megaphone"
   | "UserRoundSearch"
+  | "GraduationCap"
 
 export type NavItem = {
   label: string
@@ -96,6 +97,9 @@ export const NAV: NavGroup[] = [
   {
     label: "Sistema",
     items: [
+      // Sin `roles`: el manual es para todos. El filtrado por rol pasa adentro,
+      // sección por sección (lib/manual/contenido.ts).
+      { label: "Manual",                     href: "/manual",                  iconKey: "GraduationCap" },
       { label: DOMINIO.usuarios.plural,      href: DOMINIO.usuarios.ruta,      iconKey: "UserCog",    roles: [ROL.ADMIN] },
       { label: DOMINIO.historial.plural,     href: DOMINIO.historial.ruta,     iconKey: "ScrollText", roles: [ROL.ADMIN] },
       { label: DOMINIO.configuracion.plural, href: DOMINIO.configuracion.ruta, iconKey: "Settings",   roles: [ROL.ADMIN] },

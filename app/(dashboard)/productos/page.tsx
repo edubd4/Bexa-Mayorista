@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Plus, Search, AlertTriangle } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { LinkRow } from "@/components/ui/link-row"
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/table"
 import { ROL } from "@/lib/constants"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
+import { puedeCargarProductos } from "@/lib/permisos"
 import { formatPesos } from "@/lib/utils"
 
 type ProductoRow = {
@@ -50,6 +52,8 @@ export default async function ProductosPage({
   if (!profile?.activo) redirect("/login")
 
   const esAdmin = profile.rol === ROL.ADMIN
+  // El vendedor también da de alta productos (0017), pero sigue sin ver costos.
+  const puedeCargar = puedeCargarProductos(profile.rol)
 
   // Matriz de columnas: vendedor lee la vista SIN costo. Defensa en profundidad:
   // aunque la RLS de `productos` es admin-only, el fetch va a la vista para vendedor.
@@ -126,7 +130,7 @@ export default async function ProductosPage({
               Catálogo, precios y stock. {esAdmin ? "Ves costos y comisiones." : "Los costos y comisiones son solo para admin."}
             </p>
           </div>
-          {esAdmin && (
+          {puedeCargar && (
             <Button asChild>
               <Link href={`${ent.ruta}/nuevo`}>
                 <Plus className="w-4 h-4" />
@@ -135,6 +139,13 @@ export default async function ProductosPage({
             </Button>
           )}
         </header>
+
+        <AyudaPantalla
+          que="El catálogo: todo lo que vendés, con su precio, su stock y su código PROD. Cada producto que cargás acá es el que después aparece cuando armás una venta."
+          cuando="Cuando entra mercadería nueva que nunca vendiste, cuando querés saber cuánto stock te queda de algo, o cuando necesitás cambiarle el precio a un producto."
+          ojo="Cargar un producto acá NO suma stock ni mueve plata. El producto nace en cero: el stock entra con una compra o con un movimiento de ENTRADA desde su ficha."
+          seccion="cargar-productos"
+        />
 
         {/* Filtros */}
         <form action={ent.ruta} method="get" className="flex flex-wrap items-center gap-2">
