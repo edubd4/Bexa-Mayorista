@@ -61,6 +61,10 @@ type ItemRow = {
   descuento_pct: number
   precio_final_unit: number
   origen_precio: string | null
+  // Snapshot de la comisión de esta línea (0018). El % puede diferir entre
+  // líneas de la misma venta si algún producto tiene override.
+  comision_pct_snapshot: number
+  comision_monto: number
   producto: { id: string; id_publico: string; nombre: string } | null
 }
 
@@ -96,7 +100,7 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
   const [{ data: items }, { data: comision }] = await Promise.all([
     supabase
       .from("venta_items")
-      .select("id, cantidad, precio_unitario, descuento_pct, precio_final_unit, origen_precio, producto:producto_id ( id, id_publico, nombre )")
+      .select("id, cantidad, precio_unitario, descuento_pct, precio_final_unit, origen_precio, comision_pct_snapshot, comision_monto, producto:producto_id ( id, id_publico, nombre )")
       .eq("venta_id", venta.id)
       .order("id"),
     // Comisión visible para admin siempre, para vendedor solo si es la suya (RLS).
@@ -108,6 +112,10 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
   ])
 
   const rows = (items ?? []) as unknown as ItemRow[]
+  // ¿Hay productos con override de comisión en esta venta? Si todas las líneas
+  // fueron al mismo %, el desglose no aporta nada y no se muestra.
+  const comisionMixta =
+    new Set(rows.map((r) => Number(r.comision_pct_snapshot ?? 0))).size > 1
   const ent = DOMINIO.ventas
   const saldo = Number(venta.total) - Number(venta.total_cobrado)
   const puedeCancelar =
@@ -262,13 +270,39 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
 
         {/* Comisión (si el usuario tiene visibilidad) */}
         {comision && (
-          <section className="rounded-xl border border-app-line-soft bg-app-card p-5">
-            <h2 className="font-display font-semibold mb-2">Comisión</h2>
+          <section className="rounded-xl border border-app-line-soft bg-app-card p-5 space-y-3">
+            <h2 className="font-display font-semibold">Comisión</h2>
             <p className="text-sm text-app-secondary">
-              <span className="font-mono">{Number(comision.porcentaje)}%</span> sobre{" "}
+              <span className="font-mono">{Number(comision.porcentaje)}%</span>
+              {comisionMixta && <span className="text-app-muted"> (promedio)</span>} sobre{" "}
               <span className="font-mono">{formatPesos(Number(comision.monto_base))}</span> ={" "}
               <span className="font-mono text-app-green font-semibold">{formatPesos(Number(comision.monto))}</span>
             </p>
+
+            {/* Desglose: solo cuando hay productos con override, que es cuando
+                el número de arriba no se explica solo. Si todas las líneas van
+                al mismo %, mostrarlo sería ruido. */}
+            {comisionMixta && (
+              <div className="border-t border-app-line-soft pt-3">
+                <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest mb-2">
+                  Por producto · algunos tienen un % propio
+                </p>
+                <ul className="space-y-1">
+                  {rows.map((it) => (
+                    <li key={it.id} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-app-secondary truncate">
+                        {it.producto?.nombre ?? "—"}
+                      </span>
+                      <span className="shrink-0 font-mono text-xs">
+                        <span className="text-app-muted">{Number(it.comision_pct_snapshot)}%</span>
+                        {" · "}
+                        <span className="text-app-green">{formatPesos(Number(it.comision_monto))}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
         )}
 

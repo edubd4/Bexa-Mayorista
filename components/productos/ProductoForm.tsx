@@ -227,7 +227,9 @@ export function ProductoForm({
                 placeholder="Usar la del vendedor"
               />
               <p className="text-[11px] text-app-muted font-mono">
-                Vacío = se usa el % del vendedor. Solo lo ve y lo define el admin.
+                Vacío = se usa el % del vendedor. Si cargás un número acá, este
+                producto paga ESE % a cualquier vendedor que lo venda. Aplica a
+                las ventas nuevas; las ya registradas no cambian.
               </p>
             </div>
           )}

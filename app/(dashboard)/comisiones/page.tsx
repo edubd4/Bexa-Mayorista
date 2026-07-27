@@ -55,7 +55,10 @@ export default async function ComisionesPage() {
           <section className="rounded-xl border border-app-line-soft bg-app-card p-5">
             <h2 className="font-display font-semibold mb-3">Porcentaje por vendedor</h2>
             <p className="text-xs text-app-muted mb-3">
-              El override por producto (si existe) tiene prioridad. Sin override, se usa este %.
+              La comisión se calcula producto por producto. Si el producto tiene
+              su propio % cargado en la ficha, gana ese; si no, se usa el % del
+              vendedor de esta lista; y si el vendedor no tiene, el default de
+              Configuración. Por eso una venta puede liquidar a un % promedio.
             </p>
             <ul className="space-y-1">
               {vendedores.map((v) => (

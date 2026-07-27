@@ -287,7 +287,8 @@ export const SECCIONES: SeccionManual[] = [
     titulo: `Cargar ${D.productos.plural.toLowerCase()}`,
     resumen: "Alta de producto, stock inicial y qué significa cada campo.",
     categoria: "Tutoriales",
-    roles: SOLO_ADMIN,
+    // Admin y vendedor: los dos cargan productos. Marketing no carga catálogo.
+    roles: OPERATIVO,
     minutos: 6,
     bloques: [
       {
@@ -318,7 +319,7 @@ export const SECCIONES: SeccionManual[] = [
           {
             titulo: "4 · Costo",
             detalle:
-              "Lo que te sale a vos. Solo lo ve el admin — el vendedor nunca ve el costo, ni en pantalla ni por debajo. Ojo: cada vez que registres una compra de este producto, el costo se actualiza automáticamente con el costo de esa compra.",
+              "Lo que te sale a vos. Si sos vendedor podés cargarlo cuando das de alta el producto (vos sabés cuánto te salió), pero después NO vuelve a mostrarse: los costos del catálogo los ve solo el admin. Cargar el costo acá no mueve plata de la caja — para eso está Compras. Ojo: cada vez que registres una compra de este producto, el costo se actualiza automáticamente con el de esa compra.",
           },
           {
             titulo: "5 · Precio base",
@@ -326,14 +327,19 @@ export const SECCIONES: SeccionManual[] = [
               "El precio de venta por defecto. Es el que se usa si el cliente no tiene una lista de precios asignada. Si lo dejás en 0, el producto queda marcado como incompleto en la lista.",
           },
           {
-            titulo: "6 · Stock mínimo",
+            titulo: "6 · Comisión (solo admin)",
+            detalle:
+              "Vacío es lo normal: el producto paga el porcentaje que tenga el vendedor en su ficha. Si le cargás un número, ESTE producto paga ese porcentaje a cualquiera que lo venda, sin importar su ficha. Sirve para los productos donde el margen es distinto del promedio. Aplica a las ventas nuevas; las ya registradas no se tocan.",
+          },
+          {
+            titulo: "7 · Stock mínimo",
             detalle:
               "Cuando el stock cae por debajo de este número, el producto aparece en Alertas. Ponelo pensando en cuánto tarda tu proveedor en reponer.",
           },
           {
-            titulo: "7 · Guardá y cargá el stock inicial",
+            titulo: "8 · Guardá y cargá el stock inicial",
             detalle:
-              "El producto nace con stock 0. Desde la ficha del producto, usá el formulario de movimiento de stock con tipo ENTRADA para cargar lo que tenés en depósito hoy. Escribí el motivo: 'Stock inicial'.",
+              "El producto nace con stock 0. El stock inicial lo carga el ADMIN desde la ficha del producto, con un movimiento de tipo ENTRADA y el motivo 'Stock inicial'. Si sos vendedor y acabás de dar de alta un producto, avisale al admin: hasta que no tenga stock cargado, el producto no se puede vender.",
           },
         ],
       },
@@ -874,11 +880,19 @@ export const SECCIONES: SeccionManual[] = [
         tipo: "lista",
         titulo: "Cómo se calcula",
         items: [
-          "La comisión se genera en el momento de registrar la venta, sobre el total final (ya con descuentos aplicados).",
-          "El porcentaje sale del que tenga cargado el vendedor en su ficha de usuario.",
-          "Si el vendedor no tiene porcentaje propio, se usa el porcentaje por defecto de Configuración.",
-          "Si ninguno de los dos está cargado, no se genera comisión.",
+          "La comisión se genera en el momento de registrar la venta, no cuando se cobra.",
+          "Se calcula PRODUCTO POR PRODUCTO, sobre el precio final de cada línea (ya con el descuento aplicado).",
+          "Para cada producto, el sistema busca el porcentaje en este orden y usa el primero que encuentra: 1) el porcentaje propio del producto, cargado en su ficha; 2) el porcentaje del vendedor, en su ficha de usuario; 3) el porcentaje por defecto de Configuración.",
+          "Si no encuentra ninguno de los tres, ese producto no genera comisión.",
+          "La comisión de la venta es la suma de lo que generó cada producto.",
         ],
+      },
+      {
+        tipo: "aviso",
+        nivel: "info",
+        titulo: "Por qué a veces el porcentaje de una venta es un número raro",
+        texto:
+          "Si en la misma venta hay productos con porcentajes distintos, el porcentaje que muestra la venta es el PROMEDIO de esa venta, no el de nadie en particular. Ejemplo: vendés un producto de $100.000 al 3% y otro de $100.000 al 5%; la comisión es $8.000 y la venta muestra 4%. En el detalle de la venta tenés el desglose línea por línea para ver de dónde sale cada peso.",
       },
       {
         tipo: "lista",
