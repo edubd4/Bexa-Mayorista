@@ -5,6 +5,12 @@
 **Método**: lectura de cada función una por una, siguiendo el recorrido
 `UI → server action → RPC → RLS`.
 
+> **Estado (2026-07-27, rama `feat/manual-in-app`)**: los 7 hallazgos originales
+> están resueltos en las migraciones 0016–0019, más 4 hallazgos nuevos que
+> aparecieron al implementar los fixes (ver la sección final).
+> **Nada está aplicado en Supabase todavía** — falta correr las migraciones y
+> probar el preview con un usuario vendedor real.
+
 ---
 
 ## Resumen ejecutivo
@@ -17,15 +23,15 @@ Pero hay **un agujero estructural de permisos** que anula la regla más importan
 del proyecto ("el vendedor no ve ni los costos ni las ventas ajenas"), y **una
 funcionalidad de dinero que está muerta sin que nadie se haya enterado**.
 
-| # | Severidad | Hallazgo |
-|---|-----------|----------|
-| 1 | 🔴 CRÍTICO | Las 13 vistas de reporting **bypassean RLS** — el vendedor ve ventas, costos, ganancias y comisiones de todos |
-| 2 | 🔴 CRÍTICO | El campo "Comisión override" del producto **no se aplica nunca** |
-| 3 | 🟠 ALTO | Formulario de ajuste de stock visible para vendedores, pero la operación falla con error crudo de Postgres |
-| 4 | 🟠 ALTO | `registrar_gasto` usa fecha UTC — gastos cargados después de las 21:00 quedan con fecha de mañana |
-| 5 | 🟡 MEDIO | `actualizarPublicacion` acepta cualquier columna sin validar (mass assignment) |
-| 6 | 🟡 MEDIO | Cambios de precio en listas no dejan rastro en el Historial |
-| 7 | 🔵 BAJO | Comentarios en el código que afirman lo contrario de lo que el código hace |
+| # | Severidad | Hallazgo | Estado |
+|---|-----------|----------|--------|
+| 1 | 🔴 CRÍTICO | Las vistas de reporting **bypassean RLS** — el vendedor ve ventas, costos, ganancias y comisiones de todos | ✅ 0016 |
+| 2 | 🔴 CRÍTICO | El campo "Comisión override" del producto **no se aplica nunca** | ✅ 0018 |
+| 3 | 🟠 ALTO | Formulario de ajuste de stock visible para vendedores, pero la operación falla con error crudo de Postgres | ✅ 0019 |
+| 4 | 🟠 ALTO | `registrar_gasto` usa fecha UTC — gastos cargados después de las 21:00 quedan con fecha de mañana | ✅ 0019 |
+| 5 | 🟡 MEDIO | `actualizarPublicacion` acepta cualquier columna sin validar (mass assignment) | ✅ 0017 |
+| 6 | 🟡 MEDIO | Cambios de precio en listas no dejan rastro en el Historial | ✅ 0019 |
+| 7 | 🔵 BAJO | Comentarios en el código que afirman lo contrario de lo que el código hace | ✅ 0016/0019 |
 
 ---
 
@@ -233,13 +239,88 @@ Vale decirlo explícitamente, porque es la mayor parte del sistema:
 
 ---
 
-## Orden de trabajo sugerido
+## Hallazgos nuevos, encontrados al implementar los fixes
 
-1. **Hallazgo 1** — es el que rompe el contrato de confidencialidad con el
-   cliente. Migración + re-testeo con usuario vendedor.
-2. **Hallazgo 2** — decidir implementar o eliminar. Involucra plata.
-3. **Hallazgos 3 y 4** — fixes chicos, impacto directo en el día a día.
-4. **Hallazgos 5, 6, 7** — higiene, en el mismo PR.
+Estos cuatro no estaban en la auditoría original. Aparecieron al escribir las
+migraciones, y dos de ellos habrían roto producción.
 
-Los hallazgos 1, 3, 4 y 5 son de bajo riesgo de regresión. El 2 requiere decisión
-del cliente antes de tocar nada.
+### 🚨 8 · El fix del hallazgo 1, aplicado en bloque, TUMBA el sistema
+
+La recomendación original decía "alter view ... set (security_invoker = true)"
+para las 13 vistas. **Cuatro de ellas dependen del bypass para funcionar**:
+
+- `productos_catalogo` protege por *selección de columnas*, no por RLS. La
+  policy de `productos` es `productos_select_admin`. Con `security_invoker`, el
+  vendedor pierde el catálogo entero: **no puede elegir productos y no puede
+  vender**.
+- `v_clientes_inactivos` calcula `dias_sin_comprar` con un `left join ventas`.
+  Filtrado por RLS, un vendedor vería como "última compra" solo las suyas — y
+  le mandaría un mensaje de reactivación a un cliente que le compró ayer a otro
+  vendedor.
+- `v_campana_metricas` agrega ventas por campaña. El rol `marketing` no es admin
+  ni es vendedor de ninguna venta: no matchea ninguna rama de `ventas_select` y
+  **todas las métricas darían 0**.
+- `v_campanas` trae `costo_real` desde `gastos` (admin-only): marketing perdería
+  el costo de sus propias campañas.
+
+Las cuatro quedaron documentadas con `comment on view` para que nadie las
+"arregle" por consistencia.
+
+### 🚨 9 · No se puede revocar el grant a `authenticated`
+
+La recomendación original sugería revocar `v_ventas_ganancia` y `saldo_caja` de
+`authenticated`. **Eso las rompe también para el admin**: `authenticated` es el
+rol de Postgres de *todo* usuario logueado. No existe un rol de base de datos
+`admin` — ser admin es un valor en `profiles.rol`.
+
+Además, `security_invoker` solo no alcanzaba para `v_ventas_ganancia`: la policy
+de `ventas` es "admin OR vendedor_id = auth.uid()", así que el vendedor habría
+pasado a ver el costo y la ganancia **de sus propias ventas**. Se resolvió con
+un `where public.current_user_rol() = 'admin'` adentro de la vista.
+
+### 🚨 10 · Campañas no tenía NINGÚN control de rol
+
+Las 6 server actions de `campanas/actions.ts` usaban `requireAuthenticated()`
+sin mirar el rol, y la RLS era `campanas_all_authenticated` — una policy `FOR
+ALL` para cualquier autenticado. Un `rg` de `esAdmin|ROL\.` en toda la UI de
+campañas devolvía **cero resultados**.
+
+En la práctica: un vendedor podía crear campañas, editar el presupuesto y
+**borrar publicaciones** con un DELETE real, sin dejar rastro en el Historial.
+Resuelto en 0017 junto con el pedido del cliente de que las campañas sean del
+área de marketing.
+
+### 🚨 11 · Marketing no podía asociar productos a una campaña
+
+`campanas/nueva/page.tsx` y `campanas/[id]/edit/page.tsx` consultaban
+`supabase.from("productos")` — la tabla completa, admin-only por RLS. A un
+usuario de marketing el selector de productos le llegaba **vacío**. Ahora usan
+`productos_catalogo`.
+
+---
+
+## Lo que queda pendiente de decisión
+
+**El vendedor puede crear un producto pero no cargarle el stock.** El fix E de
+la 0014 dejó `movimientos_stock` con INSERT admin-only (a propósito: un vendedor
+podía insertar AJUSTEs arbitrarios por supabase-js). Ahora que el vendedor da de
+alta productos (0017), el circuito le queda a mitad de camino: carga el producto
+y tiene que pedirle al admin que le cargue el stock inicial.
+
+Se dejó así deliberadamente — relajar el permiso de stock es una decisión de
+control interno, no un detalle técnico. El manual lo dice con todas las letras.
+Si el cliente quiere que el vendedor cargue el stock inicial, la forma correcta
+es un RPC acotado (solo ENTRADA, solo sobre productos que él creó, sin AJUSTE),
+no aflojar la policy.
+
+---
+
+## Orden de trabajo aplicado
+
+1. **Hallazgo 1** (0016) — el que rompe el contrato de confidencialidad.
+   **Requiere re-testeo con un usuario vendedor real antes de mergear.**
+2. **Permisos** (0017) — campañas para marketing, alta de productos para el
+   vendedor. Incluye los hallazgos 5, 10 y 11.
+3. **Hallazgo 2** (0018) — comisión por ítem. Toca plata; sin efecto retroactivo.
+4. **Hallazgos 3, 4, 6, 7** (0019) — fixes operativos e higiene.
+5. **UX didáctica** — manual en el header y ayuda contextual en 17 pantallas.
