@@ -13,8 +13,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/toast"
 import { createProducto, updateProducto } from "@/app/(dashboard)/productos/actions"
 import { DOMINIO } from "@/lib/dominio"
-import type { ProductoInput } from "@/lib/validators/producto"
+import type { PrecioTramoItem, ProductoInput } from "@/lib/validators/producto"
 import { atributosATexto } from "@/lib/validators/producto"
+import { Trash2 } from "lucide-react"
 
 type Props = {
   mode: "create" | "edit"
@@ -27,7 +28,16 @@ type Props = {
   // ni se renderiza y el valor no viaja: el RPC del vendedor no lo acepta como
   // parámetro. Ver 0017.
   mostrarComision?: boolean
+  // Los precios por cantidad también son política de precios del admin. Cuando
+  // es false, el editor no se renderiza y el array no viaja (la action lo
+  // descarta igual si llegara). Pedido del cliente 2026-07-27: se cargan en el
+  // mismo lugar que el producto, tantos tramos como quiera.
+  mostrarTramos?: boolean
 }
+
+// Fila del editor de tramos: permite vacíos mientras se tipea; al enviar,
+// solo viajan las filas completas.
+type TramoFila = { cantidad_min: number | null; precio: number | null }
 
 const DEFAULTS: ProductoInput = {
   nombre: "",
@@ -51,6 +61,7 @@ export function ProductoForm({
   categoriasExistentes,
   marcasExistentes,
   mostrarComision = true,
+  mostrarTramos = true,
 }: Props) {
   const router = useRouter()
   const toast = useToast()
@@ -62,6 +73,9 @@ export function ProductoForm({
   const [atributosTexto, setAtributosTexto] = useState<string>(
     atributosATexto(initial?.atributos ?? {}),
   )
+  const [tramos, setTramos] = useState<TramoFila[]>(
+    (initial?.precios_tramo ?? []).map((t) => ({ cantidad_min: t.cantidad_min, precio: t.precio })),
+  )
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -69,11 +83,35 @@ export function ProductoForm({
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
+  function updateTramo(idx: number, campo: keyof TramoFila, value: number | null) {
+    setTramos((prev) => prev.map((t, i) => (i === idx ? { ...t, [campo]: value } : t)))
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+
+    // Filas a medio completar no viajan; duplicados se frenan acá con mensaje
+    // claro (el schema los rechaza igual en el server).
+    let preciosTramo: PrecioTramoItem[] | undefined
+    if (mostrarTramos) {
+      const completos = tramos.filter(
+        (t): t is { cantidad_min: number; precio: number } =>
+          t.cantidad_min !== null && t.cantidad_min >= 1 && t.precio !== null && t.precio > 0,
+      )
+      if (new Set(completos.map((t) => t.cantidad_min)).size !== completos.length) {
+        setError("Hay dos tramos con la misma cantidad mínima — dejá uno solo por escalón.")
+        return
+      }
+      preciosTramo = completos
+    }
+
     // El schema hace el parse del textarea. Le pasamos como string y Zod lo convierte a objeto.
-    const payload = { ...form, atributos: atributosTexto as unknown as Record<string, string> }
+    const payload = {
+      ...form,
+      atributos: atributosTexto as unknown as Record<string, string>,
+      ...(preciosTramo !== undefined ? { precios_tramo: preciosTramo } : {}),
+    }
     startTransition(async () => {
       const result = mode === "create"
         ? await createProducto(payload)
@@ -234,6 +272,65 @@ export function ProductoForm({
             </div>
           )}
         </div>
+
+        {/* Precios por cantidad (0022): tantos tramos como quiera el admin,
+            acá mismo — no en otra pantalla. El tramo que aplique a la
+            cantidad vendida PISA lista y descuentos. */}
+        {mostrarTramos && (
+          <div className="border-t border-app-line-soft pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>Precios por cantidad</Label>
+              <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">
+                El tramo pisa lista y descuentos
+              </p>
+            </div>
+
+            {tramos.length === 0 ? (
+              <p className="text-[11px] text-app-muted font-mono">
+                Sin tramos: rige la lista del cliente o el precio base. Agregá
+                escalones si el precio cambia con la cantidad (ej: 1-9 un
+                precio, 10+ otro, el bulto otro).
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {tramos.map((t, idx) => (
+                  <div key={idx} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                    <NumberInput
+                      decimals={0}
+                      value={t.cantidad_min}
+                      onChange={(v) => updateTramo(idx, "cantidad_min", v)}
+                      placeholder="Desde (unidades)"
+                      aria-label={`Cantidad mínima del tramo ${idx + 1}`}
+                    />
+                    <MoneyInput
+                      decimals={2}
+                      value={t.precio}
+                      onChange={(v) => updateTramo(idx, "precio", v)}
+                      aria-label={`Precio unitario del tramo ${idx + 1}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setTramos((prev) => prev.filter((_, i) => i !== idx))}
+                      className="text-app-muted hover:text-app-red transition-colors p-2"
+                      aria-label={`Quitar tramo ${idx + 1}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setTramos((prev) => [...prev, { cantidad_min: null, precio: null }])}
+            >
+              + Agregar tramo
+            </Button>
+          </div>
+        )}
       </section>
 
       <section className="rounded-xl border border-app-line-soft bg-app-card p-6 space-y-5">

@@ -4,7 +4,8 @@ import { ArrowLeft, AlertTriangle, Package } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { Badge } from "@/components/ui/badge"
 import { MovimientoStockForm } from "@/components/productos/MovimientoStockForm"
-import { PreciosTramoManager, type PrecioTramo } from "@/components/productos/PreciosTramoManager"
+import { PreciosPorListaManager, type PrecioPorListaFila } from "@/components/productos/PreciosPorListaManager"
+import { PreciosTramoLista, type PrecioTramo } from "@/components/productos/PreciosTramoLista"
 import { ProductoForm } from "@/components/productos/ProductoForm"
 import { ToggleProductoActivoButton } from "@/components/productos/ToggleProductoActivoButton"
 import { ROL } from "@/lib/constants"
@@ -126,6 +127,28 @@ export default async function ProductoDetallePage({ params }: { params: Params }
         .order("nombre")
     : { data: [] }
 
+  // Precios por lista (admin): cuánto vale ESTE producto en cada lista activa.
+  // Junto con precio base y tramos (en el form), la ficha concentra toda la
+  // política de precios del producto en un solo lugar.
+  let preciosPorLista: PrecioPorListaFila[] = []
+  if (esAdmin) {
+    const [{ data: listas }, { data: items }] = await Promise.all([
+      supabase.from("listas_precios").select("id, id_publico, nombre").eq("activo", true).order("nombre"),
+      supabase.from("listas_precios_items").select("id, lista_precio_id, precio").eq("producto_id", producto.id),
+    ])
+    const itemPorLista = new Map(
+      ((items ?? []) as { id: string; lista_precio_id: string; precio: number }[])
+        .map((i) => [i.lista_precio_id, i]),
+    )
+    preciosPorLista = ((listas ?? []) as { id: string; id_publico: string; nombre: string }[]).map((l) => ({
+      listaId: l.id,
+      listaIdPublico: l.id_publico,
+      nombre: l.nombre,
+      itemId: itemPorLista.get(l.id)?.id ?? null,
+      precio: itemPorLista.get(l.id) ? Number(itemPorLista.get(l.id)!.precio) : null,
+    }))
+  }
+
   const ent = DOMINIO.productos
   const stockBajo = producto.stock_minimo > 0 && producto.stock_actual <= producto.stock_minimo
   const atributos = producto.atributos ?? {}
@@ -241,6 +264,10 @@ export default async function ProductoDetallePage({ params }: { params: Params }
               precio_base: producto.precio_base,
               comision_pct: (producto as ProductoAdmin).comision_pct ?? undefined,
               stock_minimo: producto.stock_minimo,
+              precios_tramo: tramos.map((t) => ({
+                cantidad_min: t.cantidad_min,
+                precio: Number(t.precio),
+              })),
             }}
             proveedores={(proveedoresActivos ?? []) as { id: string; id_publico: string; nombre: string }[]}
             categoriasExistentes={categoriasExistentes}
@@ -248,9 +275,9 @@ export default async function ProductoDetallePage({ params }: { params: Params }
           />
         )}
 
-        {/* Precios por tramo de cantidad (0022). El tramo que aplique PISA
-            lista y descuentos. Admin gestiona; vendedor consulta (si hay). */}
-        {(esAdmin || tramos.length > 0) && (
+        {/* Precios por cantidad — vista del VENDEDOR (0022): le sirven para
+            cotizar. El admin los edita adentro del form de arriba. */}
+        {!esAdmin && tramos.length > 0 && (
           <section className="rounded-xl border border-app-line-soft bg-app-card p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-display font-semibold">Precios por cantidad</h2>
@@ -258,7 +285,23 @@ export default async function ProductoDetallePage({ params }: { params: Params }
                 El tramo pisa lista y descuentos
               </p>
             </div>
-            <PreciosTramoManager productoId={producto.id} tramos={tramos} editable={esAdmin} />
+            <PreciosTramoLista tramos={tramos} />
+          </section>
+        )}
+
+        {/* Precios por lista — un solo lugar para toda la política de precios
+            del producto: base y tramos en el form, y acá cuánto vale en cada
+            lista de precios. Admin-only (la vista del vendedor no expone la
+            estructura de listas). */}
+        {esAdmin && (
+          <section className="rounded-xl border border-app-line-soft bg-app-card p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-display font-semibold">Precios por lista</h2>
+              <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">
+                La lista del cliente pisa el precio base
+              </p>
+            </div>
+            <PreciosPorListaManager productoId={producto.id} filas={preciosPorLista} />
           </section>
         )}
 
