@@ -15,6 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { CobrarVentaDialog } from "@/components/ventas/CobrarVentaDialog"
+import { EstadoEntregaSelect } from "@/components/ventas/EstadoEntregaSelect"
 import { ROL } from "@/lib/constants"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
 import { formatFecha, formatPesos } from "@/lib/utils"
@@ -206,15 +208,33 @@ export default async function VentasPage({
                         ? <span className="text-app-amber">{formatPesos(Number(v.saldo))}</span>
                         : <span className="text-app-muted">—</span>}
                     </TableCell>
+                    {/* Entrega editable inline (0021). Cancelada queda como
+                        badge: esa venta no se toca. */}
                     <TableCell className="hidden md:table-cell">
-                      <Badge variant={ESTADO_ENTREGA_VARIANT[v.estado_entrega]}>
-                        {ESTADO_ENTREGA_LABEL[v.estado_entrega]}
-                      </Badge>
+                      {v.estado_entrega === "CANCELADA" ? (
+                        <Badge variant={ESTADO_ENTREGA_VARIANT.CANCELADA}>
+                          {ESTADO_ENTREGA_LABEL.CANCELADA}
+                        </Badge>
+                      ) : (
+                        <EstadoEntregaSelect ventaId={v.id} estado={v.estado_entrega} />
+                      )}
                     </TableCell>
+                    {/* El estado de cobro no se edita: lo deriva cobrar_venta()
+                        de la plata que entra. El atajo correcto es cobrar acá. */}
                     <TableCell>
-                      <Badge variant={ESTADO_COBRO_VARIANT[v.estado_cobro]}>
-                        {ESTADO_COBRO_LABEL[v.estado_cobro]}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant={ESTADO_COBRO_VARIANT[v.estado_cobro]}>
+                          {ESTADO_COBRO_LABEL[v.estado_cobro]}
+                        </Badge>
+                        {(v.estado_cobro === "PENDIENTE" || v.estado_cobro === "PARCIAL") &&
+                          Number(v.saldo) > 0 && (
+                            <CobrarVentaDialog
+                              ventaId={v.id}
+                              idPublico={v.id_publico}
+                              saldo={Number(v.saldo)}
+                            />
+                          )}
+                      </div>
                     </TableCell>
                   </LinkRow>
                 ))

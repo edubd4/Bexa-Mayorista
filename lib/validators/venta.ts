@@ -42,6 +42,19 @@ export const ventaSchema = z.object({
 })
 export type VentaInput = z.infer<typeof ventaSchema>
 
+// ─── Cambiar estado de entrega (0021) ──────────────────────────────────────
+// CANCELADA no es opción: cancelar es cancelar_venta (revierte stock y
+// comisión), no un cambio de entrega. El RPC valida lo mismo en SQL.
+export const cambiarEstadoEntregaSchema = z.object({
+  venta_id: zUuid(),
+  estado: z.enum([
+    ESTADO_ENTREGA.ENTREGADA,
+    ESTADO_ENTREGA.PEDIDO,
+    ESTADO_ENTREGA.EN_PREPARACION,
+  ]),
+})
+export type CambiarEstadoEntregaInput = z.infer<typeof cambiarEstadoEntregaSchema>
+
 // ─── Cancelar venta ────────────────────────────────────────────────────────
 export const cancelarVentaSchema = z.object({
   venta_id: zUuid(),

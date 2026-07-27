@@ -187,7 +187,7 @@ export const SECCIONES: SeccionManual[] = [
           {
             titulo: "3 · Revisá entregas en preparación",
             detalle:
-              "Filtrá por estado de entrega PEDIDO o EN_PREPARACIÓN. Si algo lleva más de una semana ahí, avisá al admin antes de que el cliente llame quejándose.",
+              "Filtrá por estado de entrega PEDIDO o EN_PREPARACIÓN. Cuando entregues, cambiá el estado ahí mismo, desde la tabla. Si algo lleva más de una semana ahí, avisá al admin antes de que el cliente llame quejándose.",
             ruta: "/ventas",
           },
           {
@@ -419,7 +419,7 @@ export const SECCIONES: SeccionManual[] = [
           {
             titulo: "4 · Estado de entrega",
             detalle:
-              "ENTREGADA si el cliente se lleva la mercadería ahora. PEDIDO o EN PREPARACIÓN si queda para entregar después. Poné la verdad: las entregas atrasadas de más de 7 días saltan como alerta al admin.",
+              "ENTREGADA si el cliente se lleva la mercadería ahora. PEDIDO o EN PREPARACIÓN si queda para entregar después. Cuando la entregues, actualizá el estado directo desde la tabla de Ventas — no hace falta entrar a la venta. Poné la verdad: las entregas atrasadas de más de 7 días saltan como alerta al admin.",
           },
           {
             titulo: "5 · Campaña (opcional)",

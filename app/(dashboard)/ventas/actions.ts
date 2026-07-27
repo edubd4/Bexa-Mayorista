@@ -7,9 +7,11 @@ import { TIPO_EVENTO } from "@/lib/constants"
 import { DOMINIO } from "@/lib/dominio"
 import { logHistorial } from "@/lib/historial"
 import {
+  cambiarEstadoEntregaSchema,
   cancelarVentaSchema,
   resolverPrecioParamsSchema,
   ventaSchema,
+  type CambiarEstadoEntregaInput,
   type CancelarVentaInput,
   type PrecioResuelto,
   type ResolverPrecioParams,
@@ -101,6 +103,46 @@ export async function registrarVenta(input: VentaInput): Promise<ActionResult> {
 
   revalidatePath(DOMINIO.ventas.ruta)
   redirect(`${DOMINIO.ventas.ruta}/${ventaId as string}`)
+}
+
+// ─── Cambiar estado de entrega (0021) ──────────────────────────────────────
+// Va por RPC porque la policy de UPDATE de ventas es admin-only (y está bien:
+// protege los campos contables). El RPC autoriza como cobrar_venta: admin
+// siempre, vendedor solo sus ventas. CANCELADA nunca — eso es cancelarVenta.
+export async function cambiarEstadoEntrega(input: CambiarEstadoEntregaInput): Promise<ActionResult> {
+  const parsed = cambiarEstadoEntregaSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
+  }
+
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: "No autenticado" }
+
+  const { error } = await supabase.rpc("cambiar_estado_entrega", {
+    p_venta_id: parsed.data.venta_id,
+    p_estado:   parsed.data.estado,
+  })
+  if (error) return { ok: false, error: error.message }
+
+  const { data: v } = await supabase
+    .from("ventas")
+    .select("id_publico")
+    .eq("id", parsed.data.venta_id)
+    .maybeSingle()
+
+  await logHistorial(supabase, {
+    tipo: TIPO_EVENTO.MODIFICACION,
+    descripcion: `Venta ${v?.id_publico ?? parsed.data.venta_id} · entrega → ${parsed.data.estado.replace("_", " ").toLowerCase()}`,
+    entidadTipo: "venta",
+    entidadId: v?.id_publico ?? parsed.data.venta_id,
+    payload: { estado_entrega: parsed.data.estado },
+    userId: user.id,
+  })
+
+  revalidatePath(DOMINIO.ventas.ruta)
+  revalidatePath(`${DOMINIO.ventas.ruta}/${parsed.data.venta_id}`)
+  return { ok: true }
 }
 
 // ─── Cancelar venta (revierte stock via RPC) ───────────────────────────────
