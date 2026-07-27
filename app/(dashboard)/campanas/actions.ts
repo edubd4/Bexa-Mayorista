@@ -178,12 +178,23 @@ export async function updateMetricasManuales(
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("campanas")
     .update({ metricas_manuales: parsed.data, updated_by: user.id })
     .eq("id", id)
+    .select("id_publico")
+    .single()
 
-  if (error) return { ok: false, error: error.message }
+  if (error || !data) return { ok: false, error: error?.message ?? "No se pudo guardar" }
+
+  await logHistorial(supabase, {
+    tipo: TIPO_EVENTO.MODIFICACION,
+    descripcion: `Métricas de la campaña ${data.id_publico} actualizadas`,
+    entidadTipo: "campana",
+    entidadId: data.id_publico,
+    payload: parsed.data,
+    userId: user.id,
+  })
 
   revalidatePath(`${DOMINIO.campanas.ruta}/${id}`)
   return { ok: true }
@@ -200,13 +211,22 @@ export async function crearPublicacion(input: PublicacionInput): Promise<ActionR
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
-  const { error } = await supabase.from("campana_publicaciones").insert({
-    ...parsed.data,
-    created_by: user.id,
-    updated_by: user.id,
-  })
+  const { data, error } = await supabase
+    .from("campana_publicaciones")
+    .insert({ ...parsed.data, created_by: user.id, updated_by: user.id })
+    .select("id_publico")
+    .single()
 
-  if (error) return { ok: false, error: error.message }
+  if (error || !data) return { ok: false, error: error?.message ?? "No se pudo crear la publicación" }
+
+  await logHistorial(supabase, {
+    tipo: TIPO_EVENTO.ALTA,
+    descripcion: `Publicación ${data.id_publico}${parsed.data.titulo ? ` · ${parsed.data.titulo}` : ""}`,
+    entidadTipo: "campana_publicacion",
+    entidadId: data.id_publico,
+    payload: { campana_id: parsed.data.campana_id, estado: parsed.data.estado },
+    userId: user.id,
+  })
 
   revalidatePath(`${DOMINIO.campanas.ruta}/${parsed.data.campana_id}`)
   return { ok: true }
@@ -247,17 +267,29 @@ export async function actualizarPublicacion(
 export async function borrarPublicacion(id: string): Promise<ActionResult> {
   const guard = await requireGestionCampanas()
   if (!guard.ok) return { ok: false, error: guard.error }
-  const { supabase } = guard
+  const { supabase, user } = guard
 
+  // Es un DELETE de verdad, no un soft delete: sin este registro previo no
+  // queda ningún rastro de qué se borró ni de quién lo borró.
   const { data: pub } = await supabase
     .from("campana_publicaciones")
-    .select("campana_id")
+    .select("campana_id, id_publico, titulo, cuerpo, estado")
     .eq("id", id)
     .single()
 
   const { error } = await supabase.from("campana_publicaciones").delete().eq("id", id)
   if (error) return { ok: false, error: error.message }
 
-  if (pub) revalidatePath(`${DOMINIO.campanas.ruta}/${pub.campana_id}`)
+  if (pub) {
+    await logHistorial(supabase, {
+      tipo: TIPO_EVENTO.BAJA,
+      descripcion: `Publicación ${pub.id_publico} borrada${pub.titulo ? ` · ${pub.titulo}` : ""}`,
+      entidadTipo: "campana_publicacion",
+      entidadId: pub.id_publico,
+      payload: { campana_id: pub.campana_id, estado: pub.estado, cuerpo: pub.cuerpo },
+      userId: user.id,
+    })
+    revalidatePath(`${DOMINIO.campanas.ruta}/${pub.campana_id}`)
+  }
   return { ok: true }
 }

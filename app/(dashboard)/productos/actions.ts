@@ -7,7 +7,6 @@ import { TIPO_EVENTO } from "@/lib/constants"
 import { DOMINIO } from "@/lib/dominio"
 import { esAdmin } from "@/lib/permisos"
 import { logHistorial } from "@/lib/historial"
-import { createServerClient } from "@/lib/supabase/server"
 import {
   movimientoStockSchema,
   productoSchema,
@@ -215,18 +214,24 @@ export async function toggleProductoActivo(id: string): Promise<ActionResult> {
 }
 
 // ─── Movimientos de stock ──────────────────────────────────────────────────
-// Cualquier usuario autenticado puede registrar (la RLS del schema lo permite —
-// el módulo ventas de Ola B disparará SALIDA con auth.uid()). El trigger valida
-// stock suficiente y actualiza productos.stock_actual atómicamente.
+// SOLO ADMIN. El comentario anterior decía "cualquier usuario autenticado puede
+// registrar (la RLS del schema lo permite)" y quedó viejo: el fix E de la 0014
+// cambió la policy a `movstock_insert_admin` porque un vendedor podía insertar
+// AJUSTEs arbitrarios llamando a supabase-js directo. Sin este guard, el
+// vendedor recibía un error crudo de Postgres en vez de un mensaje.
+// El único caller no-admin legítimo es registrar_venta, que es SECURITY DEFINER
+// y no pasa por acá.
+// El trigger valida stock suficiente y actualiza productos.stock_actual de
+// forma atómica.
 export async function registrarMovimientoStock(input: MovimientoStockInput): Promise<ActionResult> {
   const parsed = movimientoStockSchema.safeParse(input)
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
 
-  const supabase = await createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: "No autenticado" }
+  const guard = await requireAdmin()
+  if (!guard.ok) return { ok: false, error: guard.error }
+  const { supabase, user } = guard
 
   const { data: producto } = await supabase
     .from("productos_catalogo")
