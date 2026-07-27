@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { Pencil, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -18,6 +19,7 @@ import {
 import {
   createCategoriaGasto,
   toggleCategoriaGastoActivo,
+  updateCategoriaGasto,
 } from "@/app/(dashboard)/gastos/actions"
 
 type Categoria = { id: number; nombre: string; descripcion: string | null; activo: boolean }
@@ -27,6 +29,11 @@ export function CategoriasGastoManager({ categorias }: { categorias: Categoria[]
   const [nombre, setNombre] = useState("")
   const [descripcion, setDescripcion] = useState("")
   const [error, setError] = useState<string | null>(null)
+  // Edición inline (una fila a la vez): renombrar un typo no debería ser
+  // imposible — antes solo se podía desactivar y crear otra.
+  const [editId, setEditId] = useState<number | null>(null)
+  const [editNombre, setEditNombre] = useState("")
+  const [editDescripcion, setEditDescripcion] = useState("")
   const [isPending, startTransition] = useTransition()
 
   async function handleAdd() {
@@ -44,6 +51,30 @@ export function CategoriasGastoManager({ categorias }: { categorias: Categoria[]
       toast.success("Categoría creada")
       setNombre("")
       setDescripcion("")
+    })
+  }
+
+  function startEdit(c: Categoria) {
+    setEditId(c.id)
+    setEditNombre(c.nombre)
+    setEditDescripcion(c.descripcion ?? "")
+  }
+
+  async function handleSaveEdit() {
+    setError(null)
+    if (editId === null) return
+    if (!editNombre.trim()) return setError("Nombre requerido")
+    startTransition(async () => {
+      const res = await updateCategoriaGasto(editId, {
+        nombre: editNombre.trim(),
+        descripcion: editDescripcion.trim() || undefined,
+      })
+      if (!res.ok) {
+        setError(res.error)
+        return
+      }
+      toast.success("Categoría actualizada")
+      setEditId(null)
     })
   }
 
@@ -96,21 +127,66 @@ export function CategoriasGastoManager({ categorias }: { categorias: Categoria[]
           {categorias.length === 0 ? (
             <TableEmpty colSpan={3}>Sin categorías todavía.</TableEmpty>
           ) : (
-            categorias.map((c) => (
-              <TableRow key={c.id}>
-                <TableCell className="font-medium">{c.nombre}</TableCell>
-                <TableCell className="hidden md:table-cell text-sm text-app-secondary">
-                  {c.descripcion ?? "—"}
-                </TableCell>
-                <TableCell className="text-right">
-                  <button type="button" onClick={() => handleToggle(c)} disabled={isPending}>
-                    <Badge variant={c.activo ? "green" : "gray"}>
-                      {c.activo ? "Activa" : "Inactiva"}
-                    </Badge>
-                  </button>
-                </TableCell>
-              </TableRow>
-            ))
+            categorias.map((c) =>
+              editId === c.id ? (
+                <TableRow key={c.id}>
+                  <TableCell>
+                    <Input
+                      value={editNombre}
+                      onChange={(e) => setEditNombre(e.target.value)}
+                      aria-label="Nombre de la categoría"
+                    />
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    <Input
+                      value={editDescripcion}
+                      onChange={(e) => setEditDescripcion(e.target.value)}
+                      aria-label="Descripción de la categoría"
+                    />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="inline-flex items-center gap-1.5">
+                      <Button type="button" size="sm" onClick={handleSaveEdit} disabled={isPending}>
+                        {isPending ? "…" : "Guardar"}
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => setEditId(null)}
+                        className="text-app-muted hover:text-app-text"
+                        aria-label="Cancelar edición"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                <TableRow key={c.id}>
+                  <TableCell className="font-medium">{c.nombre}</TableCell>
+                  <TableCell className="hidden md:table-cell text-sm text-app-secondary">
+                    {c.descripcion ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => startEdit(c)}
+                        disabled={isPending}
+                        className="text-app-muted hover:text-app-accent transition-colors"
+                        aria-label={`Editar categoría ${c.nombre}`}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button type="button" onClick={() => handleToggle(c)} disabled={isPending}>
+                        <Badge variant={c.activo ? "green" : "gray"}>
+                          {c.activo ? "Activa" : "Inactiva"}
+                        </Badge>
+                      </button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ),
+            )
           )}
         </TableBody>
       </Table>

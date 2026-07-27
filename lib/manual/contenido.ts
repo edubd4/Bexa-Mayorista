@@ -187,7 +187,7 @@ export const SECCIONES: SeccionManual[] = [
           {
             titulo: "3 · Revisá entregas en preparación",
             detalle:
-              "Filtrá por estado de entrega PEDIDO o EN_PREPARACIÓN. Si algo lleva más de una semana ahí, avisá al admin antes de que el cliente llame quejándose.",
+              "Filtrá por estado de entrega PEDIDO o EN_PREPARACIÓN. Cuando entregues, cambiá el estado ahí mismo, desde la tabla. Si algo lleva más de una semana ahí, avisá al admin antes de que el cliente llame quejándose.",
             ruta: "/ventas",
           },
           {
@@ -274,9 +274,68 @@ export const SECCIONES: SeccionManual[] = [
       {
         tipo: "aviso",
         nivel: "cuidado",
-        titulo: "Caja y gastos no se borran",
+        titulo: "Caja y gastos no se borran — los gastos se ANULAN",
         texto:
-          "Los movimientos de caja y los gastos son inmutables por diseño: no se editan ni se eliminan. Si cargaste uno mal, se corrige con un movimiento contrario que lo compense, dejando la explicación escrita. Así la contabilidad siempre se puede auditar.",
+          "Los movimientos de caja y los gastos son inmutables por diseño: no se editan ni se eliminan. Un gasto mal cargado se ANULA desde la tabla de Gastos (botón Anular, con motivo): la plata vuelve a la caja con un ajuste y el gasto queda marcado, sin borrar nada. Si el gasto era real pero estaba mal cargado, registralo de nuevo con los datos correctos. Así la contabilidad siempre se puede auditar.",
+      },
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════════════════
+  {
+    slug: "tareas",
+    titulo: "Tareas del equipo",
+    resumen: "Tus tareas del día: qué te toca, cómo marcarlas y qué queda registrado.",
+    categoria: "Tutoriales",
+    minutos: 4,
+    bloques: [
+      {
+        tipo: "texto",
+        parrafos: [
+          "Tareas es el sistema operativo del equipo: cada uno entra y ve qué le toca hoy, con su horario sugerido y su prioridad. Las diarias aparecen todos los días, las semanales su día, las mensuales su fecha — solas, no hay que cargarlas de nuevo.",
+        ],
+      },
+      {
+        tipo: "pasos",
+        titulo: "El circuito de una tarea",
+        pasos: [
+          {
+            titulo: "1 · Abrí Tareas al arrancar el día",
+            detalle:
+              "Ahí está tu lista de hoy, ordenada por horario. Si una tarea tiene manual (el ícono de link), leelo antes de hacerla la primera vez.",
+            ruta: "/tareas",
+          },
+          {
+            titulo: "2 · Marcá 'En proceso' cuando la agarrás",
+            detalle:
+              "Un toque en el botón. El sistema guarda la hora real en que empezaste — no hace falta anotar nada.",
+          },
+          {
+            titulo: "3 · Marcá 'Finalizada' cuando la terminás",
+            detalle:
+              "En el momento, no al final del día. La hora de cierre queda registrada y el admin ve el avance del equipo sin preguntar.",
+          },
+          {
+            titulo: "4 · Las 'cuando corresponda' se registran al hacerlas",
+            detalle:
+              "Tareas como 'Enviar lista de precios' no tienen día fijo. Cuando la hacés, tocá 'La hago hoy' y marcala como cualquier otra.",
+          },
+        ],
+      },
+      {
+        tipo: "aviso",
+        nivel: "ojo",
+        titulo: "La hora la pone el sistema, no vos",
+        texto:
+          "Cada cambio de estado queda sellado con la hora real del momento en que lo marcaste. Marcar todo junto a las 20:00 se nota en la auditoría. Marcá en el momento y listo — es un toque.",
+      },
+      {
+        tipo: "aviso",
+        nivel: "info",
+        titulo: "Para el admin",
+        texto:
+          "Vos ves el tablero completo agrupado por persona, gestionás el catálogo (crear, asignar responsable, frecuencia, prioridad, link al manual de cada tarea) y tenés la Auditoría con los horarios reales de inicio y fin de cada ejecución. Una tarea que ya no aplica se desactiva — el historial queda.",
       },
     ],
   },
@@ -342,6 +401,13 @@ export const SECCIONES: SeccionManual[] = [
               "El producto nace con stock 0. Cargá el stock desde la ficha del producto con un movimiento de tipo ENTRADA y el motivo (por ejemplo 'Stock inicial'). Si sos vendedor, podés cargar y corregir el stock de los productos que diste de alta VOS — si la mercadería llega en partes, cargá una ENTRADA por cada tanda. El stock de los demás productos lo maneja el admin. Hasta que no tenga stock cargado, el producto no se puede vender.",
           },
         ],
+      },
+      {
+        tipo: "aviso",
+        nivel: "info",
+        titulo: "Precios por cantidad: el tramo manda",
+        texto:
+          "Un producto puede tener precios por tramo: de 1 a 9 unidades un precio, de 10 en adelante otro. Se cargan en la ficha del producto (sección 'Precios por cantidad'). Ojo con la regla: si un tramo aplica a la cantidad vendida, ESE es el precio — no se le suma la lista del cliente ni los descuentos. Un solo beneficio por cantidad, así el precio siempre se puede explicar.",
       },
       {
         tipo: "aviso",
@@ -419,7 +485,7 @@ export const SECCIONES: SeccionManual[] = [
           {
             titulo: "4 · Estado de entrega",
             detalle:
-              "ENTREGADA si el cliente se lleva la mercadería ahora. PEDIDO o EN PREPARACIÓN si queda para entregar después. Poné la verdad: las entregas atrasadas de más de 7 días saltan como alerta al admin.",
+              "ENTREGADA si el cliente se lleva la mercadería ahora. PEDIDO o EN PREPARACIÓN si queda para entregar después. Cuando la entregues, actualizá el estado directo desde la tabla de Ventas — no hace falta entrar a la venta. Poné la verdad: las entregas atrasadas de más de 7 días saltan como alerta al admin.",
           },
           {
             titulo: "5 · Campaña (opcional)",

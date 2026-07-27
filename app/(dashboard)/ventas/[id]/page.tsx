@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { Badge } from "@/components/ui/badge"
+import { EstadoEntregaSelect } from "@/components/ventas/EstadoEntregaSelect"
 import { CancelarVentaButton } from "@/components/ventas/CancelarVentaButton"
 import { CobrarVentaForm } from "@/components/ventas/CobrarVentaForm"
 import {
@@ -159,9 +160,14 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
           </div>
           <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-2">
-              <Badge variant={ESTADO_ENTREGA_VARIANT[venta.estado_entrega]}>
-                {ESTADO_ENTREGA_LABEL[venta.estado_entrega]}
-              </Badge>
+              {/* Entrega editable (0021); una venta cancelada no se toca. */}
+              {venta.estado_entrega === "CANCELADA" ? (
+                <Badge variant={ESTADO_ENTREGA_VARIANT.CANCELADA}>
+                  {ESTADO_ENTREGA_LABEL.CANCELADA}
+                </Badge>
+              ) : (
+                <EstadoEntregaSelect ventaId={venta.id} estado={venta.estado_entrega} />
+              )}
               <Badge variant={ESTADO_COBRO_VARIANT[venta.estado_cobro]}>
                 {ESTADO_COBRO_LABEL[venta.estado_cobro]}
               </Badge>

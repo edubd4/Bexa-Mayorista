@@ -84,3 +84,12 @@ export const gastoSchema = z.object({
   notas:        z.preprocess(emptyToUndef, z.string().trim().max(1000).optional()),
 })
 export type GastoInput = z.infer<typeof gastoSchema>
+
+// ─── Anular gasto (0023) ────────────────────────────────────────────────────
+// El motivo es obligatorio: la anulación genera un INGRESO AJUSTE en caja y
+// tiene que explicarse sola en el extracto.
+export const anularGastoSchema = z.object({
+  gasto_id: zUuid(),
+  motivo:   z.string().trim().min(1, "El motivo de la anulación es obligatorio").max(500),
+})
+export type AnularGastoInput = z.infer<typeof anularGastoSchema>

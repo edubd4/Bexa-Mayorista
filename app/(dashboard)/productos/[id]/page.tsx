@@ -4,6 +4,7 @@ import { ArrowLeft, AlertTriangle, Package } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { Badge } from "@/components/ui/badge"
 import { MovimientoStockForm } from "@/components/productos/MovimientoStockForm"
+import { PreciosTramoManager, type PrecioTramo } from "@/components/productos/PreciosTramoManager"
 import { ProductoForm } from "@/components/productos/ProductoForm"
 import { ToggleProductoActivoButton } from "@/components/productos/ToggleProductoActivoButton"
 import { ROL } from "@/lib/constants"
@@ -77,7 +78,7 @@ export default async function ProductoDetallePage({ params }: { params: Params }
   const producto = prodRow as unknown as ProductoAdmin | ProductoVendedor
 
   // Datos auxiliares para admin: proveedor + form editable, listas de opciones.
-  const [proveedorRes, ultimosMovsRes, catRowsRes, marcaRowsRes] = await Promise.all([
+  const [proveedorRes, ultimosMovsRes, catRowsRes, marcaRowsRes, tramosRes] = await Promise.all([
     producto.proveedor_id
       ? supabase.from("proveedores")
           .select("id, id_publico, nombre")
@@ -96,9 +97,17 @@ export default async function ProductoDetallePage({ params }: { params: Params }
     esAdmin
       ? supabase.from("productos_catalogo").select("marca").not("marca", "is", null)
       : Promise.resolve({ data: [] }),
+    // Tramos de precio por cantidad (0022). El vendedor también los ve:
+    // le sirven para cotizar — el precio de venta no es una columna sensible.
+    supabase
+      .from("productos_precios_tramo")
+      .select("id, cantidad_min, precio")
+      .eq("producto_id", params.id)
+      .order("cantidad_min"),
   ])
   const proveedor = (proveedorRes.data as { id: string; id_publico: string; nombre: string } | null) ?? null
   const movimientos = (ultimosMovsRes.data ?? []) as unknown as MovimientoRow[]
+  const tramos = (tramosRes.data ?? []) as unknown as PrecioTramo[]
 
   const categoriasExistentes = Array.from(
     new Set(((catRowsRes.data ?? []) as { categoria: string | null }[])
@@ -237,6 +246,20 @@ export default async function ProductoDetallePage({ params }: { params: Params }
             categoriasExistentes={categoriasExistentes}
             marcasExistentes={marcasExistentes}
           />
+        )}
+
+        {/* Precios por tramo de cantidad (0022). El tramo que aplique PISA
+            lista y descuentos. Admin gestiona; vendedor consulta (si hay). */}
+        {(esAdmin || tramos.length > 0) && (
+          <section className="rounded-xl border border-app-line-soft bg-app-card p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-display font-semibold">Precios por cantidad</h2>
+              <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">
+                El tramo pisa lista y descuentos
+              </p>
+            </div>
+            <PreciosTramoManager productoId={producto.id} tramos={tramos} editable={esAdmin} />
+          </section>
         )}
 
         {/* Movimientos de stock */}

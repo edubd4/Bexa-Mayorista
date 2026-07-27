@@ -17,7 +17,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { createRegla, toggleReglaActivo } from "@/app/(dashboard)/listas-precios/actions"
+import { Trash2 } from "lucide-react"
+import { useConfirm } from "@/components/ui/confirm-dialog"
+import { createRegla, removeRegla, toggleReglaActivo } from "@/app/(dashboard)/listas-precios/actions"
 import {
   SCOPE_DESCUENTO,
   type ReglaDescuentoInput,
@@ -53,6 +55,7 @@ const SCOPE_LABEL: Record<ScopeDescuento, string> = {
 
 export function ReglasManager({ listaId, productos, categorias, reglas, ambito }: Props) {
   const toast = useToast()
+  const confirm = useConfirm()
   const [scope, setScope] = useState<ScopeDescuento>(SCOPE_DESCUENTO.PRODUCTO)
   const [productoId, setProductoId] = useState<string>("")
   const [categoria, setCategoria] = useState<string>("")
@@ -90,6 +93,21 @@ export function ReglasManager({ listaId, productos, categorias, reglas, ambito }
       const res = await toggleReglaActivo(r.id, listaId)
       if (!res.ok) toast.error(res.error)
       else toast.success(r.activo ? "Regla desactivada" : "Regla reactivada")
+    })
+  }
+
+  async function handleRemove(r: Regla) {
+    const ok = await confirm({
+      title: `¿Eliminar la regla ${r.id_publico}?`,
+      description: "Las ventas ya hechas no cambian: el descuento aplicado quedó guardado en cada venta.",
+      confirmLabel: "Eliminar regla",
+      tone: "danger",
+    })
+    if (!ok) return
+    startTransition(async () => {
+      const res = await removeRegla(r.id, listaId)
+      if (!res.ok) toast.error(res.error)
+      else toast.success("Regla eliminada")
     })
   }
 
@@ -200,16 +218,26 @@ export function ReglasManager({ listaId, productos, categorias, reglas, ambito }
                   <TableCell className="text-right font-mono text-sm">{r.cantidad_min}+</TableCell>
                   <TableCell className="text-right font-mono text-sm">{Number(r.descuento_pct)}%</TableCell>
                   <TableCell className="text-right">
-                    <button
-                      type="button"
-                      onClick={() => handleToggle(r)}
-                      disabled={isPending}
-                      className="inline-flex items-center gap-2"
-                    >
-                      <Badge variant={r.activo ? "green" : "gray"}>
-                        {r.activo ? "Activa" : "Inactiva"}
-                      </Badge>
-                    </button>
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleToggle(r)}
+                        disabled={isPending}
+                      >
+                        <Badge variant={r.activo ? "green" : "gray"}>
+                          {r.activo ? "Activa" : "Inactiva"}
+                        </Badge>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(r)}
+                        disabled={isPending}
+                        className="text-app-muted hover:text-app-red transition-colors disabled:opacity-50"
+                        aria-label={`Eliminar regla ${r.id_publico}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </TableCell>
                 </TableRow>
               )
