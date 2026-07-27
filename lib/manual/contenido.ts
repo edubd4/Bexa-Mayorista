@@ -342,7 +342,7 @@ export const SECCIONES: SeccionManual[] = [
         nivel: "info",
         titulo: "Para el admin",
         texto:
-          "Vos ves el día completo del equipo agrupado por área, con las cards de arriba como filtros (tocá 'Atrasadas' y la tabla muestra solo eso). Desde la misma fila asignás el responsable y cambiás la frecuencia, sin entrar a la ficha. El 'Resumen de la semana' te muestra el cumplimiento por día y por persona. Y la Auditoría guarda los horarios reales de inicio y fin de cada ejecución. Una tarea que ya no aplica se desactiva — el historial queda.",
+          "Vos ves el día completo del equipo agrupado por área, con las cards de arriba como filtros (tocá 'Atrasadas' y la tabla muestra solo eso). Desde la misma fila asignás el responsable y cambiás la frecuencia, sin entrar a la ficha. El cumplimiento de la semana — por día y por persona — lo tenés en el Panel, junto al resto de los números del negocio. Y la Auditoría guarda los horarios reales de inicio y fin de cada ejecución. Una tarea que ya no aplica se desactiva — el historial queda.",
       },
     ],
   },
