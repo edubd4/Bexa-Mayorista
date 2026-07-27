@@ -5,6 +5,7 @@ import { createServerClient } from "@/lib/supabase/server"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { LinkRow } from "@/components/ui/link-row"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import {
   Table,
   TableBody,
@@ -71,6 +72,13 @@ export default async function ListasPreciosPage() {
           </Button>
         </header>
 
+        <AyudaPantalla
+          que="Una lista de precios es un precio especial para un grupo de clientes. En vez de cargarle un precio distinto a cada cliente, armás una lista (por ejemplo 'Mayorista') y se la asignás a todos los que corresponda desde su ficha."
+          cuando="Cuando un grupo de clientes te compra a otro precio que el mostrador: mayoristas, un cliente grande, una promoción por temporada. Si todos te compran al mismo precio, no necesitás listas: alcanza con el precio base de cada producto."
+          ojo="Solo cargás en la lista los productos cuyo precio cambia. El producto que no está en la lista se vende a su precio base — no queda sin precio."
+          seccion="listas-de-precios"
+        />
+
         {/* Reglas generales (aplicables a todas las listas incluso ventas sin lista) */}
         <Link
           href="/listas-precios/reglas-generales"
@@ -101,7 +109,11 @@ export default async function ListasPreciosPage() {
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
-                <TableEmpty colSpan={4}>Todavía no creaste listas.</TableEmpty>
+                <TableEmpty colSpan={4}>
+                  Todavía no creaste listas. Una lista es un precio especial
+                  para un grupo de clientes — por ejemplo &quot;Mayorista&quot;.
+                  Si todos te compran al mismo precio, no necesitás ninguna.
+                </TableEmpty>
               ) : (
                 rows.map((l) => (
                   <LinkRow key={l.id} href={`/listas-precios/${l.id}`}>

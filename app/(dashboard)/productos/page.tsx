@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Plus, Search, AlertTriangle } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { LinkRow } from "@/components/ui/link-row"
@@ -138,6 +139,13 @@ export default async function ProductosPage({
             </Button>
           )}
         </header>
+
+        <AyudaPantalla
+          que="El catálogo: todo lo que vendés, con su precio, su stock y su código PROD. Cada producto que cargás acá es el que después aparece cuando armás una venta."
+          cuando="Cuando entra mercadería nueva que nunca vendiste, cuando querés saber cuánto stock te queda de algo, o cuando necesitás cambiarle el precio a un producto."
+          ojo="Cargar un producto acá NO suma stock ni mueve plata. El producto nace en cero: el stock entra con una compra o con un movimiento de ENTRADA desde su ficha."
+          seccion="cargar-productos"
+        />
 
         {/* Filtros */}
         <form action={ent.ruta} method="get" className="flex flex-wrap items-center gap-2">

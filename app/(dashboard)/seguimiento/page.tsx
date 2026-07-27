@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { UserRoundSearch, Phone, MessageCircle } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import {
   Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
@@ -81,6 +82,12 @@ export default async function SeguimientoPage() {
             </Link>.
           </p>
         </header>
+
+        <AyudaPantalla
+          que="Los clientes que te compraban seguido y hace rato no aparecen, con el mensaje listo para copiar y mandarles."
+          cuando="Una o dos veces por semana, cuando tenés un rato para salir a buscar ventas en vez de esperarlas."
+          seccion="metodologia"
+        />
 
         <section className="rounded-xl border border-app-line-soft bg-app-card overflow-hidden">
           <div className="px-5 py-3 border-b border-app-line-soft flex items-center gap-2">

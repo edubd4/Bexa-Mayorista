@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Plus, Search } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { LinkRow } from "@/components/ui/link-row"
@@ -91,6 +92,13 @@ export default async function ComprasPage({
           </Button>
         </header>
 
+        <AyudaPantalla
+          que="Lo que le comprás a tus proveedores para reponer. Al registrar una compra, el stock sube solo y el costo de cada producto se actualiza con lo que acabás de pagar."
+          cuando="Cuando te llega mercadería de un proveedor. Registrala con la factura en la mano, así los costos quedan al día."
+          ojo="La compra PISA el costo del producto con el costo de esta compra — no calcula un promedio. Si compraste diez unidades más caras, la ganancia de todo tu stock viejo se recalcula con ese costo nuevo."
+          seccion="cargar-compra"
+        />
+
         {/* Filtros */}
         <form action={ent.ruta} method="get" className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
@@ -130,7 +138,10 @@ export default async function ComprasPage({
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
-                <TableEmpty colSpan={6}>Sin compras todavía.</TableEmpty>
+                <TableEmpty colSpan={6}>
+                  Todavía no cargaste compras. Registrá una cuando te llegue
+                  mercadería: sube el stock y actualiza el costo de cada producto.
+                </TableEmpty>
               ) : (
                 rows.map((c) => (
                   <LinkRow key={c.id} href={`${ent.ruta}/${c.id}`}>

@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Plus, Search } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { LinkRow } from "@/components/ui/link-row"
@@ -117,6 +118,13 @@ export default async function VentasPage({
           </Button>
         </header>
 
+        <AyudaPantalla
+          que="Todas las ventas registradas, con su estado de cobro y de entrega. Desde acá registrás una venta nueva y entrás a cobrar las que quedaron pendientes."
+          cuando="Cada vez que le vendés algo a alguien, en el momento. Y cuando un cliente viene a pagarte algo que se había llevado con saldo."
+          ojo="Registrar la venta descuenta el stock enseguida, pero NO entra la plata a la caja. La plata entra recién cuando cobrás la venta."
+          seccion="registrar-venta"
+        />
+
         {/* Filtros */}
         <form action={ent.ruta} method="get" className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
@@ -170,7 +178,11 @@ export default async function VentasPage({
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
-                <TableEmpty colSpan={esAdmin ? 8 : 7}>Sin ventas todavía.</TableEmpty>
+                <TableEmpty colSpan={esAdmin ? 8 : 7}>
+                  {q.length >= 2 || searchParams.cobro || searchParams.entrega
+                    ? "Ninguna venta coincide con estos filtros. Probá sacando alguno."
+                    : "Todavía no hay ventas registradas. Registrá una con el botón de arriba: se descuenta el stock y se genera la comisión sola."}
+                </TableEmpty>
               ) : (
                 rows.map((v) => (
                   <LinkRow key={v.id} href={`${ent.ruta}/${v.id}`}>

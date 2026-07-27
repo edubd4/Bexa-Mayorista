@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import {
   Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
@@ -51,6 +52,13 @@ export default async function ComisionesPage() {
           </p>
         </header>
 
+        <AyudaPantalla
+          que="Cuánto le corresponde cobrar a cada vendedor, semana por semana (de lunes a domingo)."
+          cuando="Cuando liquidás las comisiones de la semana que cerró."
+          ojo="La comisión se genera al REGISTRAR la venta, no al cobrarla. Y las ventas canceladas no cuentan para la liquidación."
+          seccion="comisiones"
+        />
+
         {esAdmin && vendedores.length > 0 && (
           <section className="rounded-xl border border-app-line-soft bg-app-card p-5">
             <h2 className="font-display font-semibold mb-3">Porcentaje por vendedor</h2>
@@ -92,7 +100,11 @@ export default async function ComisionesPage() {
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
-                <TableEmpty colSpan={esAdmin ? 5 : 4}>Sin comisiones registradas.</TableEmpty>
+                <TableEmpty colSpan={esAdmin ? 5 : 4}>
+                  {esAdmin
+                    ? "Todavía no hay comisiones. Se generan solas al registrar una venta, siempre que el vendedor o el producto tengan un porcentaje cargado."
+                    : "Todavía no tenés comisiones. Se generan al registrar una venta, no al cobrarla."}
+                </TableEmpty>
               ) : rows.map((r, idx) => (
                 <TableRow key={`${r.vendedor_id}-${r.semana_inicio}-${idx}`}>
                   <TableCell className="font-mono text-sm text-app-secondary">{formatFecha(r.semana_inicio)}</TableCell>

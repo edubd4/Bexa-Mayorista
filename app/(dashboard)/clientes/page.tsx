@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Plus, Search } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { LinkRow } from "@/components/ui/link-row"
@@ -108,6 +109,13 @@ export default async function ClientesPage({
             </Button>
           )}
         </header>
+
+        <AyudaPantalla
+          que="Tu cartera de clientes, con su teléfono, su tipo (mayorista o minorista) y la lista de precios que le corresponde a cada uno."
+          cuando="Cuando le vendés por primera vez a alguien, o cuando querés ver todo lo que un cliente te compró y cuánto te debe."
+          ojo="Para una venta de mostrador sin datos usá el cliente 'Consumidor Final', que ya viene cargado. No crees un cliente nuevo por cada persona que pasa."
+          seccion="clientes"
+        />
 
         {/* Filtros */}
         <form action={ent.ruta} method="get" className="flex flex-wrap items-center gap-2">

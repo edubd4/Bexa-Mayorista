@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { ChevronRight, Tag } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { ConfiguracionForm } from "@/components/configuracion/ConfiguracionForm"
 import { CONFIG_FIELDS } from "@/lib/validators/configuracion"
 import { ROL } from "@/lib/constants"
@@ -53,6 +54,12 @@ export default async function ConfiguracionPage() {
             sus parámetros acá.
           </p>
         </header>
+
+        <AyudaPantalla
+          que="Los valores que el sistema usa por todos lados: el porcentaje de comisión por defecto, a los cuántos días un cliente se considera inactivo, los prefijos de los códigos."
+          cuando="Casi nunca. Se toca al arrancar y después solo si cambia una regla del negocio."
+          ojo="Cambiar el porcentaje de comisión por defecto no modifica las ventas ya registradas: cada venta se queda con el porcentaje que tenía en su momento."
+        />
 
         <ConfiguracionForm values={values} />
 

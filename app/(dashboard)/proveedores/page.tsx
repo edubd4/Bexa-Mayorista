@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Plus, Search } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { LinkRow } from "@/components/ui/link-row"
@@ -91,6 +92,12 @@ export default async function ProveedoresPage({
             </Button>
           )}
         </header>
+
+        <AyudaPantalla
+          que="A quién le comprás. Guarda el contacto, las condiciones de pago y te deja ver todo lo que le compraste a cada uno."
+          cuando="Antes de cargar la primera compra de un proveedor nuevo, y cuando necesitás su teléfono para hacer un pedido."
+          seccion="cargar-compra"
+        />
 
         {/* Filtros */}
         <form action={ent.ruta} method="get" className="flex flex-wrap items-center gap-2">

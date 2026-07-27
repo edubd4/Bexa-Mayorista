@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableEmpty } from "@/components/ui/table"
 import { ROL } from "@/lib/constants"
@@ -106,6 +107,12 @@ export default async function HistorialPage({
             Todos los eventos importantes que pasaron. Append-only, inmutable.
           </p>
         </header>
+
+        <AyudaPantalla
+          que="Todo lo que pasó en el sistema: quién hizo qué y cuándo. No se puede editar ni borrar."
+          cuando="Cuando algo no cierra y necesitás saber quién lo tocó: un precio que cambió, un stock que no coincide, una venta que apareció o desapareció."
+          seccion="metodologia"
+        />
 
         {/* Filtros */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">

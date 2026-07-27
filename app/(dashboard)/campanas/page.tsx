@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Plus, Search, Calendar } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Button } from "@/components/ui/button"
 import { LinkRow } from "@/components/ui/link-row"
 import {
@@ -95,6 +96,13 @@ export default async function CampanasPage({
             )}
           </div>
         </header>
+
+        <AyudaPantalla
+          que="Las campañas de marketing: qué se está promocionando, en qué canales, con qué presupuesto y qué ventas trajo."
+          cuando="Si sos del área de marketing, para armar y seguir tus campañas. Si sos vendedor, para saber qué se está promocionando antes de atender."
+          ojo="Las campañas las crea y las edita el área de marketing. El vendedor las mira pero no las toca."
+          seccion="campanas"
+        />
 
         <form action={ent.ruta} method="get" className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
