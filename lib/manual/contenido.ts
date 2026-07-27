@@ -339,7 +339,7 @@ export const SECCIONES: SeccionManual[] = [
           {
             titulo: "8 · Guardá y cargá el stock inicial",
             detalle:
-              "El producto nace con stock 0. El stock inicial lo carga el ADMIN desde la ficha del producto, con un movimiento de tipo ENTRADA y el motivo 'Stock inicial'. Si sos vendedor y acabás de dar de alta un producto, avisale al admin: hasta que no tenga stock cargado, el producto no se puede vender.",
+              "El producto nace con stock 0. Cargá el stock desde la ficha del producto con un movimiento de tipo ENTRADA y el motivo (por ejemplo 'Stock inicial'). Si sos vendedor, podés cargar y corregir el stock de los productos que diste de alta VOS — si la mercadería llega en partes, cargá una ENTRADA por cada tanda. El stock de los demás productos lo maneja el admin. Hasta que no tenga stock cargado, el producto no se puede vender.",
           },
         ],
       },

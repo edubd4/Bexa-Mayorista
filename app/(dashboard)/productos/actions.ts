@@ -9,8 +9,10 @@ import { esAdmin } from "@/lib/permisos"
 import { logHistorial } from "@/lib/historial"
 import {
   movimientoStockSchema,
+  movimientoStockVendedorSchema,
   productoSchema,
   type MovimientoStockInput,
+  type MovimientoStockVendedorInput,
   type ProductoInput,
 } from "@/lib/validators/producto"
 import { signoDelta } from "@/lib/productos-ui"
@@ -219,8 +221,8 @@ export async function toggleProductoActivo(id: string): Promise<ActionResult> {
 // cambió la policy a `movstock_insert_admin` porque un vendedor podía insertar
 // AJUSTEs arbitrarios llamando a supabase-js directo. Sin este guard, el
 // vendedor recibía un error crudo de Postgres en vez de un mensaje.
-// El único caller no-admin legítimo es registrar_venta, que es SECURITY DEFINER
-// y no pasa por acá.
+// Los callers no-admin legítimos son registrar_venta y registrar_stock_vendedor
+// (0020), ambos SECURITY DEFINER — no pasan por acá.
 // El trigger valida stock suficiente y actualiza productos.stock_actual de
 // forma atómica.
 export async function registrarMovimientoStock(input: MovimientoStockInput): Promise<ActionResult> {
@@ -253,6 +255,55 @@ export async function registrarMovimientoStock(input: MovimientoStockInput): Pro
     entidadTipo: "producto",
     entidadId: producto.id_publico,
     payload: { tipo: parsed.data.tipo, cantidad: parsed.data.cantidad, motivo: parsed.data.motivo ?? null },
+    userId: user.id,
+  })
+
+  revalidatePath(DOMINIO.productos.ruta)
+  revalidatePath(`${DOMINIO.productos.ruta}/${parsed.data.producto_id}`)
+  return { ok: true }
+}
+
+// Variante del vendedor (0020). Va por el RPC registrar_stock_vendedor
+// (SECURITY DEFINER) porque la policy de INSERT sigue siendo admin-only: el
+// RPC valida rol, que el producto sea SUYO (created_by), tipo sin SALIDA y
+// motivo obligatorio. La mercadería llega en partes — puede cargar ENTRADAs
+// cuando sea — y corrige errores propios con AJUSTE. Decisión del cliente
+// 2026-07-27; el detalle del control interno está en la 0020.
+export async function registrarMovimientoStockVendedor(
+  input: MovimientoStockVendedorInput,
+): Promise<ActionResult> {
+  const parsed = movimientoStockVendedorSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
+  }
+
+  const guard = await requireCargaProductos()
+  if (!guard.ok) return { ok: false, error: guard.error }
+  const { supabase, user } = guard
+
+  const { data: producto } = await supabase
+    .from("productos_catalogo")
+    .select("id, id_publico, nombre")
+    .eq("id", parsed.data.producto_id)
+    .maybeSingle()
+  if (!producto) return { ok: false, error: "Producto no encontrado" }
+
+  const { error: rpcErr } = await supabase.rpc("registrar_stock_vendedor", {
+    p_producto_id: parsed.data.producto_id,
+    p_tipo: parsed.data.tipo,
+    p_cantidad: parsed.data.cantidad,
+    p_motivo: parsed.data.motivo,
+  })
+  if (rpcErr) {
+    return { ok: false, error: rpcErr.message }
+  }
+
+  await logHistorial(supabase, {
+    tipo: TIPO_EVENTO.MOVIMIENTO,
+    descripcion: `Stock ${producto.id_publico} · ${signoDelta(parsed.data.tipo)}${parsed.data.cantidad} (${parsed.data.tipo.replace("_", " ").toLowerCase()})`,
+    entidadTipo: "producto",
+    entidadId: producto.id_publico,
+    payload: { tipo: parsed.data.tipo, cantidad: parsed.data.cantidad, motivo: parsed.data.motivo },
     userId: user.id,
   })
 
