@@ -8,10 +8,12 @@ import { Label } from "@/components/ui/label"
 import { NumberInput } from "@/components/ui/number-input"
 import { Select } from "@/components/ui/select"
 import { useToast } from "@/components/ui/toast"
-import { registrarMovimientoStock } from "@/app/(dashboard)/productos/actions"
+import {
+  registrarMovimientoStock,
+  registrarMovimientoStockVendedor,
+} from "@/app/(dashboard)/productos/actions"
 import {
   TIPO_MOV_STOCK,
-  type MovimientoStockInput,
   type TipoMovStock,
 } from "@/lib/validators/producto"
 import { TIPO_MOV_STOCK_LABEL } from "@/lib/productos-ui"
@@ -19,11 +21,26 @@ import { TIPO_MOV_STOCK_LABEL } from "@/lib/productos-ui"
 type Props = {
   productoId: string
   stockActual: number
+  // "admin" inserta directo (policy movstock_insert_admin). "vendedor" va por
+  // el RPC registrar_stock_vendedor (0020): sin SALIDA y con motivo
+  // obligatorio — el vendedor recibe mercadería y corrige SUS cargas, nunca
+  // saca stock (eso es una venta).
+  modo?: "admin" | "vendedor"
 }
 
-export function MovimientoStockForm({ productoId, stockActual }: Props) {
+type TipoMovStockVendedor = Exclude<TipoMovStock, "SALIDA">
+
+const TIPOS_VENDEDOR: TipoMovStockVendedor[] = [
+  TIPO_MOV_STOCK.ENTRADA,
+  TIPO_MOV_STOCK.AJUSTE_POSITIVO,
+  TIPO_MOV_STOCK.AJUSTE_NEGATIVO,
+]
+
+export function MovimientoStockForm({ productoId, stockActual, modo = "admin" }: Props) {
   const router = useRouter()
   const toast = useToast()
+  const esVendedor = modo === "vendedor"
+  const tipos = esVendedor ? TIPOS_VENDEDOR : (Object.keys(TIPO_MOV_STOCK) as TipoMovStock[])
   const [tipo, setTipo] = useState<TipoMovStock>(TIPO_MOV_STOCK.ENTRADA)
   const [cantidad, setCantidad] = useState<number | null>(null)
   const [motivo, setMotivo] = useState<string>("")
@@ -37,14 +54,26 @@ export function MovimientoStockForm({ productoId, stockActual }: Props) {
       setError("Cantidad requerida (> 0)")
       return
     }
-    const payload: MovimientoStockInput = {
-      producto_id: productoId,
-      tipo,
-      cantidad,
-      motivo: motivo.trim() || undefined,
+    if (esVendedor && !motivo.trim()) {
+      setError("El motivo es obligatorio: contá qué llegó o qué corregís")
+      return
     }
     startTransition(async () => {
-      const res = await registrarMovimientoStock(payload)
+      const res = esVendedor
+        ? await registrarMovimientoStockVendedor({
+            producto_id: productoId,
+            // El select en modo vendedor solo ofrece TIPOS_VENDEDOR; el
+            // schema y el RPC vuelven a validar por si acaso.
+            tipo: tipo as TipoMovStockVendedor,
+            cantidad,
+            motivo: motivo.trim(),
+          })
+        : await registrarMovimientoStock({
+            producto_id: productoId,
+            tipo,
+            cantidad,
+            motivo: motivo.trim() || undefined,
+          })
       if (!res.ok) {
         setError(res.error)
         return
@@ -70,7 +99,7 @@ export function MovimientoStockForm({ productoId, stockActual }: Props) {
             value={tipo}
             onChange={(e) => setTipo(e.target.value as TipoMovStock)}
           >
-            {(Object.keys(TIPO_MOV_STOCK) as TipoMovStock[]).map((t) => (
+            {tipos.map((t) => (
               <option key={t} value={t}>{TIPO_MOV_STOCK_LABEL[t]}</option>
             ))}
           </Select>
@@ -86,12 +115,12 @@ export function MovimientoStockForm({ productoId, stockActual }: Props) {
           />
         </div>
         <div className="space-y-1.5 md:col-span-1">
-          <Label htmlFor="mov-motivo">Motivo</Label>
+          <Label htmlFor="mov-motivo">Motivo{esVendedor ? "" : " (opcional)"}</Label>
           <Input
             id="mov-motivo"
             value={motivo}
             onChange={(e) => setMotivo(e.target.value)}
-            placeholder="Compra, rotura, inventario…"
+            placeholder={esVendedor ? "Llegó la segunda parte del pedido…" : "Compra, rotura, inventario…"}
           />
         </div>
       </div>

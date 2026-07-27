@@ -301,17 +301,19 @@ usuario de marketing el selector de productos le llegaba **vacío**. Ahora usan
 
 ## Lo que queda pendiente de decisión
 
-**El vendedor puede crear un producto pero no cargarle el stock.** El fix E de
-la 0014 dejó `movimientos_stock` con INSERT admin-only (a propósito: un vendedor
-podía insertar AJUSTEs arbitrarios por supabase-js). Ahora que el vendedor da de
-alta productos (0017), el circuito le queda a mitad de camino: carga el producto
-y tiene que pedirle al admin que le cargue el stock inicial.
+**RESUELTO en la 0020 (2026-07-27).** El vendedor podía crear un producto pero
+no cargarle el stock: el fix E de la 0014 dejó `movimientos_stock` con INSERT
+admin-only (a propósito: un vendedor podía insertar AJUSTEs arbitrarios por
+supabase-js), y desde la 0017 el circuito quedaba a mitad de camino.
 
-Se dejó así deliberadamente — relajar el permiso de stock es una decisión de
-control interno, no un detalle técnico. El manual lo dice con todas las letras.
-Si el cliente quiere que el vendedor cargue el stock inicial, la forma correcta
-es un RPC acotado (solo ENTRADA, solo sobre productos que él creó, sin AJUSTE),
-no aflojar la policy.
+La decisión del cliente fue cerrarlo con el RPC acotado
+`registrar_stock_vendedor()` (SECURITY DEFINER, la policy no se tocó):
+
+- ENTRADA y AJUSTEs de corrección, **solo sobre productos que él creó**.
+- **SALIDA jamás** — la única salida de stock es una venta o el admin.
+- Motivo obligatorio; todo queda en `movimientos_stock` + historial.
+- Sin ventana temporal: la mercadería llega en partes (días seguidos) y el
+  vendedor corrige sus propios errores de carga.
 
 ---
 

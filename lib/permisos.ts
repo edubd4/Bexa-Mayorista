@@ -8,8 +8,9 @@ import { ROL, type Rol } from "@/lib/constants"
 // una. Cada función de acá tiene su espejo en SQL; si cambia una, cambia la
 // otra:
 //
-//   puedeGestionarCampanas  ←→  public.puede_gestionar_campanas()   (0017)
-//   puedeCargarProductos    ←→  check de rol en crear_producto_vendedor() (0017)
+//   puedeGestionarCampanas    ←→  public.puede_gestionar_campanas()   (0017)
+//   puedeCargarProductos      ←→  check de rol en crear_producto_vendedor() (0017)
+//   puedeCargarStockVendedor  ←→  checks de registrar_stock_vendedor() (0020)
 //
 // Estas funciones deciden qué se MUESTRA. Nunca son la única defensa: la server
 // action valida de nuevo con su guard, y la RLS valida de nuevo en la base.
@@ -38,4 +39,12 @@ export function puedeCargarProductos(rol: RolInput): boolean {
 // producto (lo trae él) — eso es escribir, no leer. Ver 0017.
 export function puedeVerCostos(rol: RolInput): boolean {
   return rol === ROL.ADMIN
+}
+
+// Stock del vendedor (0020): solo sobre productos que ÉL creó — completa su
+// alta y corrige sus errores, no toca el catálogo ajeno. La mercadería llega
+// en partes, así que no hay ventana temporal (decisión del cliente 2026-07-27).
+// El admin no pasa por acá: tiene el form completo con insert directo.
+export function puedeCargarStockVendedor(rol: RolInput, esCreadorDelProducto: boolean): boolean {
+  return rol === ROL.COLABORADOR && esCreadorDelProducto
 }

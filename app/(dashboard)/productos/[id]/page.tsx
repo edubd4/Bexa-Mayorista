@@ -8,6 +8,7 @@ import { ProductoForm } from "@/components/productos/ProductoForm"
 import { ToggleProductoActivoButton } from "@/components/productos/ToggleProductoActivoButton"
 import { ROL } from "@/lib/constants"
 import { DOMINIO } from "@/lib/dominio"
+import { puedeCargarStockVendedor } from "@/lib/permisos"
 import { TIPO_MOV_STOCK_LABEL, TIPO_MOV_STOCK_VARIANT, signoDelta } from "@/lib/productos-ui"
 import type { TipoMovStock } from "@/lib/validators/producto"
 import { formatFechaHora, formatPesos } from "@/lib/utils"
@@ -32,7 +33,11 @@ type ProductoAdmin = {
   activo: boolean
 }
 
-type ProductoVendedor = Omit<ProductoAdmin, "costo" | "comision_pct">
+// created_by solo se pide en la variante vendedor: decide si puede cargar
+// stock (productos que él creó, ver 0020). Al admin no le hace falta.
+type ProductoVendedor = Omit<ProductoAdmin, "costo" | "comision_pct"> & {
+  created_by: string | null
+}
 
 type MovimientoRow = {
   id: number
@@ -60,7 +65,7 @@ export default async function ProductoDetallePage({ params }: { params: Params }
   const table = esAdmin ? "productos" : "productos_catalogo"
   const columns = esAdmin
     ? "id, id_publico, sku, nombre, descripcion, categoria, marca, atributos, proveedor_id, costo, precio_base, comision_pct, stock_actual, stock_minimo, activo"
-    : "id, id_publico, sku, nombre, descripcion, categoria, marca, atributos, proveedor_id, precio_base, stock_actual, stock_minimo, activo"
+    : "id, id_publico, sku, nombre, descripcion, categoria, marca, atributos, proveedor_id, precio_base, stock_actual, stock_minimo, activo, created_by"
 
   const { data: prodRow } = await supabase
     .from(table)
@@ -243,16 +248,24 @@ export default async function ProductoDetallePage({ params }: { params: Params }
             </p>
           </div>
 
-          {/* Solo admin. El fix E de la 0014 dejó la policy de INSERT en
-              admin-only; el form estaba fuera del bloque `esAdmin` y el
-              vendedor lo veía, lo completaba y recibía un error crudo de
-              Postgres al guardar. */}
+          {/* Admin: form completo, insert directo (policy de la 0014).
+              Vendedor sobre un producto que ÉL creó: form acotado que va por
+              el RPC registrar_stock_vendedor (0020) — recibe mercadería en
+              partes y corrige sus cargas, sin SALIDA y con motivo obligatorio.
+              Vendedor sobre producto ajeno (o marketing): sigue siendo cosa
+              del admin. */}
           {esAdmin ? (
             <MovimientoStockForm productoId={producto.id} stockActual={producto.stock_actual} />
+          ) : puedeCargarStockVendedor(profile.rol, "created_by" in producto && producto.created_by === user.id) ? (
+            <MovimientoStockForm
+              productoId={producto.id}
+              stockActual={producto.stock_actual}
+              modo="vendedor"
+            />
           ) : (
             <p className="text-xs text-app-muted font-mono">
-              Los movimientos de stock los registra el admin. Si contaste una
-              diferencia, avisale para que la ajuste.
+              Los movimientos de stock de este producto los registra el admin.
+              Si contaste una diferencia, avisale para que la ajuste.
             </p>
           )}
 

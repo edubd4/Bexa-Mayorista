@@ -78,3 +78,19 @@ export const movimientoStockSchema = z.object({
 })
 
 export type MovimientoStockInput = z.infer<typeof movimientoStockSchema>
+
+// Variante del vendedor (0020): sin SALIDA — la única salida de stock es una
+// venta — y con motivo obligatorio. El RPC registrar_stock_vendedor valida lo
+// mismo en SQL; esto existe para que el error llegue en castellano y antes.
+export const movimientoStockVendedorSchema = z.object({
+  producto_id: zUuid(),
+  tipo: z.enum([
+    TIPO_MOV_STOCK.ENTRADA,
+    TIPO_MOV_STOCK.AJUSTE_POSITIVO,
+    TIPO_MOV_STOCK.AJUSTE_NEGATIVO,
+  ]),
+  cantidad: z.preprocess(numeroPreprocess, z.number().int().positive("La cantidad debe ser mayor a 0")),
+  motivo: z.string().trim().min(1, "El motivo es obligatorio").max(500),
+})
+
+export type MovimientoStockVendedorInput = z.infer<typeof movimientoStockVendedorSchema>
