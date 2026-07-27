@@ -49,6 +49,7 @@ export function TareaForm({ mode, tareaId, initial, usuarios, areasExistentes }:
   const [diaMes, setDiaMes] = useState<number | null>(initial?.dia_mes ?? null)
   const [horaSugerida, setHoraSugerida] = useState(initial?.hora_sugerida ?? "")
   const [manualUrl, setManualUrl] = useState(initial?.manual_url ?? "")
+  const [fechaLimite, setFechaLimite] = useState(initial?.fecha_limite ?? "")
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -68,6 +69,7 @@ export function TareaForm({ mode, tareaId, initial, usuarios, areasExistentes }:
       dia_semana: frecuencia === FRECUENCIA_TAREA.SEMANAL ? Number(diaSemana) : undefined,
       dia_mes: frecuencia === FRECUENCIA_TAREA.MENSUAL ? (diaMes ?? undefined) : undefined,
       hora_sugerida: horaSugerida || undefined,
+      fecha_limite: fechaLimite || undefined,
       manual_url: manualUrl.trim() || undefined,
     }
 
@@ -165,6 +167,18 @@ export function TareaForm({ mode, tareaId, initial, usuarios, areasExistentes }:
         <div className="space-y-1.5">
           <Label htmlFor="t-tiempo">Tiempo estimado (min)</Label>
           <NumberInput id="t-tiempo" decimals={0} value={tiempoEstimado} onChange={setTiempoEstimado} placeholder="30" />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="t-limite">Fecha límite (opcional)</Label>
+          <Input
+            id="t-limite"
+            type="date"
+            value={fechaLimite}
+            onChange={(e) => setFechaLimite(e.target.value)}
+          />
+          <p className="text-[10.5px] font-mono text-app-muted">
+            Vencida y sin finalizar = atrasada.
+          </p>
         </div>
       </div>
 
