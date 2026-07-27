@@ -58,20 +58,27 @@ export const NAV: NavGroup[] = [
       { label: DOMINIO.tareas.plural, href: DOMINIO.tareas.ruta, iconKey: "ListChecks" },
       { label: DOMINIO.ventas.plural,  href: DOMINIO.ventas.ruta,  iconKey: "ClipboardList", roles: [...OPERATIVO] },
       { label: DOMINIO.compras.plural, href: DOMINIO.compras.ruta, iconKey: "Receipt",        roles: [ROL.ADMIN] },
+      // Alertas es la rutina diaria del admin, no "análisis": vive con la operación.
+      { label: "Alertas", href: "/alertas", iconKey: "AlertTriangle", roles: [ROL.ADMIN] },
     ],
   },
+  // Reagrupado 2026-07-27 (pedido del cliente): los grupos de un solo ítem
+  // ("Comercial") y los que mezclaban cosas ("Maestros", "Análisis") se
+  // reordenan por CÓMO SE TRABAJA: el catálogo con su política de precios al
+  // lado, y los clientes con su seguimiento.
   {
-    label: "Maestros",
+    label: "Catálogo y precios",
     items: [
-      { label: DOMINIO.clientes.plural,    href: DOMINIO.clientes.ruta,    iconKey: "Users"                          },
-      { label: DOMINIO.proveedores.plural, href: DOMINIO.proveedores.ruta, iconKey: "Landmark", roles: [...OPERATIVO] },
       { label: DOMINIO.productos.plural,   href: DOMINIO.productos.ruta,   iconKey: "Package"                        },
+      { label: "Listas de precios",        href: "/listas-precios",        iconKey: "BookOpen", roles: [ROL.ADMIN]   },
+      { label: DOMINIO.proveedores.plural, href: DOMINIO.proveedores.ruta, iconKey: "Landmark", roles: [...OPERATIVO] },
     ],
   },
   {
-    label: "Comercial",
+    label: "Clientes",
     items: [
-      { label: "Listas de precios", href: "/listas-precios", iconKey: "BookOpen", roles: [ROL.ADMIN] },
+      { label: DOMINIO.clientes.plural,    href: DOMINIO.clientes.ruta,    iconKey: "Users"           },
+      { label: DOMINIO.seguimiento.plural, href: DOMINIO.seguimiento.ruta, iconKey: "UserRoundSearch" },
     ],
   },
   {
@@ -89,13 +96,6 @@ export const NAV: NavGroup[] = [
     items: [
       { label: DOMINIO.campanas.plural, href: DOMINIO.campanas.ruta,       iconKey: "Megaphone"    },
       { label: "Calendario",             href: "/campanas/calendario",     iconKey: "CalendarDays" },
-    ],
-  },
-  {
-    label: "Análisis",
-    items: [
-      { label: "Alertas", href: "/alertas", iconKey: "AlertTriangle", roles: [ROL.ADMIN] },
-      { label: DOMINIO.seguimiento.plural, href: DOMINIO.seguimiento.ruta, iconKey: "UserRoundSearch" },
     ],
   },
   {

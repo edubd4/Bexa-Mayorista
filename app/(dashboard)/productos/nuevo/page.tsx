@@ -77,6 +77,7 @@ export default async function NuevoProductoPage() {
         <ProductoForm
           mode="create"
           mostrarComision={mostrarComision}
+          mostrarTramos={mostrarComision}
           proveedores={(proveedores ?? []) as { id: string; id_publico: string; nombre: string }[]}
           categoriasExistentes={categoriasExistentes}
           marcasExistentes={marcasExistentes}

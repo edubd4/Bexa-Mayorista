@@ -32,6 +32,18 @@ const numeroPreprocess = (v: unknown): unknown => {
   return Number.isFinite(n) ? n : undefined
 }
 
+// ─── Precios por tramo de cantidad (0022) ──────────────────────────────────
+// Precio ABSOLUTO por escalón. Viajan DENTRO del producto (pedido del cliente
+// 2026-07-27: los precios se cargan en el mismo lugar que el producto): el
+// form manda el array completo y el server reconcilia (upsert + borrar los
+// que ya no están). Si un tramo aplica a la cantidad vendida, pisa lista y
+// descuentos.
+export const precioTramoItemSchema = z.object({
+  cantidad_min: z.preprocess(numeroPreprocess, z.number().int().min(1, "La cantidad mínima de un tramo debe ser al menos 1")),
+  precio:       z.preprocess(numeroPreprocess, z.number().positive("El precio de un tramo debe ser mayor a 0")),
+})
+export type PrecioTramoItem = z.infer<typeof precioTramoItemSchema>
+
 export const productoSchema = z.object({
   nombre:        z.string().trim().min(1, "El nombre es obligatorio").max(200),
   sku:           z.preprocess(emptyToUndef, z.string().trim().max(60).optional()),
@@ -44,6 +56,15 @@ export const productoSchema = z.object({
   precio_base:   z.preprocess(numeroPreprocess, z.number().nonnegative("El precio no puede ser negativo").default(0)),
   comision_pct:  z.preprocess(numeroPreprocess, z.number().min(0).max(100, "La comisión va de 0 a 100").optional()),
   stock_minimo:  z.preprocess(numeroPreprocess, z.number().int().nonnegative().default(0)),
+  // Solo lo manda el form del admin (la política de precios es suya). No es
+  // columna de `productos`: las actions lo separan y reconcilian contra
+  // productos_precios_tramo.
+  precios_tramo: z.array(precioTramoItemSchema)
+    .optional()
+    .refine(
+      (ts) => !ts || new Set(ts.map((t) => t.cantidad_min)).size === ts.length,
+      "Hay dos tramos con la misma cantidad mínima",
+    ),
 })
 
 export type ProductoInput = z.infer<typeof productoSchema>
@@ -95,18 +116,3 @@ export const movimientoStockVendedorSchema = z.object({
 
 export type MovimientoStockVendedorInput = z.infer<typeof movimientoStockVendedorSchema>
 
-// ─── Precios por tramo de cantidad (0022) ──────────────────────────────────
-// Precio ABSOLUTO por escalón de cantidad. Editar = guardar de nuevo el mismo
-// cantidad_min (upsert). Si un tramo aplica, pisa lista y descuentos.
-export const precioTramoSchema = z.object({
-  producto_id:  zUuid(),
-  cantidad_min: z.preprocess(numeroPreprocess, z.number().int().min(1, "La cantidad mínima debe ser al menos 1")),
-  precio:       z.preprocess(numeroPreprocess, z.number().positive("El precio debe ser mayor a 0")),
-})
-export type PrecioTramoInput = z.infer<typeof precioTramoSchema>
-
-export const eliminarPrecioTramoSchema = z.object({
-  producto_id: zUuid(),
-  tramo_id:    zUuid(),
-})
-export type EliminarPrecioTramoInput = z.infer<typeof eliminarPrecioTramoSchema>

@@ -407,7 +407,7 @@ export const SECCIONES: SeccionManual[] = [
         nivel: "info",
         titulo: "Precios por cantidad: el tramo manda",
         texto:
-          "Un producto puede tener precios por tramo: de 1 a 9 unidades un precio, de 10 en adelante otro. Se cargan en la ficha del producto (sección 'Precios por cantidad'). Ojo con la regla: si un tramo aplica a la cantidad vendida, ESE es el precio — no se le suma la lista del cliente ni los descuentos. Un solo beneficio por cantidad, así el precio siempre se puede explicar.",
+          "Un producto puede tener precios por tramo: de 1 a 9 unidades un precio, de 10 en adelante otro, el bulto otro — tantos escalones como quieras. Se cargan en el MISMO formulario del producto (al crearlo o editarlo), sección 'Precios por cantidad'. Ojo con la regla: si un tramo aplica a la cantidad vendida, ESE es el precio — no se le suma la lista del cliente ni los descuentos. Un solo beneficio por cantidad, así el precio siempre se puede explicar.",
       },
       {
         tipo: "aviso",
