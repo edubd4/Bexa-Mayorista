@@ -36,9 +36,17 @@ type Props = {
   campanaId: string
   canales: Canal[]
   publicaciones: Publicacion[]
+  // El vendedor LEE las publicaciones (necesita saber qué se está comunicando
+  // para vender), pero no las crea ni las borra. Ver 0017.
+  soloLectura?: boolean
 }
 
-export function PublicacionesManager({ campanaId, canales, publicaciones }: Props) {
+export function PublicacionesManager({
+  campanaId,
+  canales,
+  publicaciones,
+  soloLectura = false,
+}: Props) {
   const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
@@ -113,6 +121,7 @@ export function PublicacionesManager({ campanaId, canales, publicaciones }: Prop
   return (
     <div className="space-y-6">
       {/* Nueva publicación */}
+      {!soloLectura && (
       <section className="rounded-xl border border-app-line-soft bg-app-card p-5 space-y-3">
         <h3 className="font-display font-semibold text-base">Nueva publicación</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -156,11 +165,14 @@ export function PublicacionesManager({ campanaId, canales, publicaciones }: Prop
           </Button>
         </div>
       </section>
+      )}
 
       {/* Listado */}
       {publicaciones.length === 0 ? (
         <p className="text-sm text-app-muted text-center py-6">
-          Todavía no hay publicaciones. Agregá la primera arriba.
+          {soloLectura
+            ? "Todavía no hay publicaciones en esta campaña."
+            : "Todavía no hay publicaciones. Agregá la primera arriba."}
         </p>
       ) : (
         <div className="space-y-3">
@@ -177,23 +189,25 @@ export function PublicacionesManager({ campanaId, canales, publicaciones }: Prop
                   </div>
                   {p.titulo && <p className="font-display font-semibold mt-1.5">{p.titulo}</p>}
                 </div>
-                <div className="flex gap-1.5 shrink-0">
-                  <select
-                    value={p.estado}
-                    onChange={(e) => handleCambiarEstado(p.id, e.target.value as EstadoPublicacion)}
-                    disabled={isPending}
-                    className="h-8 rounded-md bg-app-input border border-app-line px-2 text-xs text-app-text"
-                    aria-label="Cambiar estado"
-                  >
-                    {Object.values(ESTADO_PUBLICACION).map((v) => (
-                      <option key={v} value={v}>{ESTADO_PUBLICACION_LABEL[v]}</option>
-                    ))}
-                  </select>
-                  <Button variant="ghost" size="icon" onClick={() => handleBorrar(p.id)} disabled={isPending}
-                    aria-label="Borrar publicación">
-                    <Trash2 className="w-4 h-4 text-app-red" />
-                  </Button>
-                </div>
+                {!soloLectura && (
+                  <div className="flex gap-1.5 shrink-0">
+                    <select
+                      value={p.estado}
+                      onChange={(e) => handleCambiarEstado(p.id, e.target.value as EstadoPublicacion)}
+                      disabled={isPending}
+                      className="h-8 rounded-md bg-app-input border border-app-line px-2 text-xs text-app-text"
+                      aria-label="Cambiar estado"
+                    >
+                      {Object.values(ESTADO_PUBLICACION).map((v) => (
+                        <option key={v} value={v}>{ESTADO_PUBLICACION_LABEL[v]}</option>
+                      ))}
+                    </select>
+                    <Button variant="ghost" size="icon" onClick={() => handleBorrar(p.id)} disabled={isPending}
+                      aria-label="Borrar publicación">
+                      <Trash2 className="w-4 h-4 text-app-red" />
+                    </Button>
+                  </div>
+                )}
               </header>
               <p className="text-sm text-app-text whitespace-pre-wrap">{p.cuerpo}</p>
             </article>

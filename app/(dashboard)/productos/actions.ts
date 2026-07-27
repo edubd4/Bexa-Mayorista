@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { requireAdmin } from "@/lib/auth-guards"
+import { requireAdmin, requireCargaProductos } from "@/lib/auth-guards"
 import { TIPO_EVENTO } from "@/lib/constants"
 import { DOMINIO } from "@/lib/dominio"
+import { esAdmin } from "@/lib/permisos"
 import { logHistorial } from "@/lib/historial"
 import { createServerClient } from "@/lib/supabase/server"
 import {
@@ -17,36 +18,77 @@ import { signoDelta } from "@/lib/productos-ui"
 
 type ActionResult = { ok: false; error: string } | { ok: true }
 
+// Alta de producto. La hacen el admin Y el vendedor (decisión del cliente,
+// 0017), por dos caminos distintos:
+//
+//   admin    → INSERT directo. Puede definir comision_pct.
+//   vendedor → RPC crear_producto_vendedor (SECURITY DEFINER, lista blanca de
+//              parámetros). Puede tipear el costo del producto que trae, pero
+//              NO define comisión y NO gana permiso de lectura sobre los costos
+//              del catálogo. Ver la nota larga en la 0017.
 export async function createProducto(input: ProductoInput): Promise<ActionResult> {
   const parsed = productoSchema.safeParse(input)
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
 
-  const guard = await requireAdmin()
+  const guard = await requireCargaProductos()
   if (!guard.ok) return { ok: false, error: guard.error }
-  const { supabase, user } = guard
+  const { supabase, user, rol } = guard
 
-  const { data, error } = await supabase
-    .from("productos")
-    .insert({ ...parsed.data, created_by: user.id, updated_by: user.id })
-    .select("id, id_publico, nombre")
-    .single()
+  let creado: { id: string; id_publico: string; nombre: string }
 
-  if (error || !data) {
-    return { ok: false, error: error?.message ?? "No se pudo crear el producto" }
+  if (esAdmin(rol)) {
+    const { data, error } = await supabase
+      .from("productos")
+      .insert({ ...parsed.data, created_by: user.id, updated_by: user.id })
+      .select("id, id_publico, nombre")
+      .single()
+
+    if (error || !data) {
+      return { ok: false, error: error?.message ?? "No se pudo crear el producto" }
+    }
+    creado = data
+  } else {
+    // `comision_pct` no viaja: no es parámetro del RPC. Si el form de un
+    // vendedor lo mandara igual, se ignora acá y la función lo escribe null.
+    const { data, error } = await supabase.rpc("crear_producto_vendedor", {
+      p_nombre:       parsed.data.nombre,
+      p_sku:          parsed.data.sku ?? null,
+      p_descripcion:  parsed.data.descripcion ?? null,
+      p_categoria:    parsed.data.categoria ?? null,
+      p_marca:        parsed.data.marca ?? null,
+      p_atributos:    parsed.data.atributos ?? {},
+      p_proveedor_id: parsed.data.proveedor_id ?? null,
+      p_costo:        parsed.data.costo ?? 0,
+      p_precio_base:  parsed.data.precio_base ?? 0,
+      p_stock_minimo: parsed.data.stock_minimo ?? 0,
+    })
+
+    const fila = (Array.isArray(data) ? data[0] : data) as
+      | { producto_id: string; producto_id_publico: string }
+      | undefined
+
+    if (error || !fila) {
+      return { ok: false, error: error?.message ?? "No se pudo crear el producto" }
+    }
+    creado = {
+      id: fila.producto_id,
+      id_publico: fila.producto_id_publico,
+      nombre: parsed.data.nombre,
+    }
   }
 
   await logHistorial(supabase, {
     tipo: TIPO_EVENTO.ALTA,
-    descripcion: `Producto ${data.id_publico} · ${data.nombre}`,
+    descripcion: `Producto ${creado.id_publico} · ${creado.nombre}`,
     entidadTipo: "producto",
-    entidadId: data.id_publico,
+    entidadId: creado.id_publico,
     userId: user.id,
   })
 
   revalidatePath(DOMINIO.productos.ruta)
-  redirect(`${DOMINIO.productos.ruta}/${data.id}`)
+  redirect(`${DOMINIO.productos.ruta}/${creado.id}`)
 }
 
 // ─── Quick-create desde el form de compras ──────────────────────────────────

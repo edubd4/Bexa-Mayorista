@@ -28,8 +28,11 @@ const ACCIONES: Accion[] = [
   { label: "Nuevo gasto",     href: "/gastos/nuevo",      icon: Wallet,        tono: "amber",  roles: [ROL.ADMIN] },
   { label: "Nuevo cliente",   href: "/clientes/nuevo",    icon: Users,         tono: "accent", roles: [ROL.ADMIN] },
   { label: "Nuevo proveedor", href: "/proveedores/nuevo", icon: Landmark,      tono: "accent", roles: [ROL.ADMIN] },
-  { label: "Nuevo producto",  href: "/productos/nuevo",   icon: Package,       tono: "accent", roles: [ROL.ADMIN] },
-  { label: "Nueva campaña",   href: "/campanas/nueva",    icon: Megaphone,     tono: "violet", roles: [ROL.ADMIN, ROL.COLABORADOR, ROL.MARKETING] },
+  // El vendedor carga productos: es el que trae la mercadería nueva y el que
+  // primero se entera de que falta algo en el catálogo. Ver 0017.
+  { label: "Nuevo producto",  href: "/productos/nuevo",   icon: Package,       tono: "accent", roles: [ROL.ADMIN, ROL.COLABORADOR] },
+  // Las campañas son del área de marketing. El vendedor las mira, no las crea.
+  { label: "Nueva campaña",   href: "/campanas/nueva",    icon: Megaphone,     tono: "violet", roles: [ROL.ADMIN, ROL.MARKETING] },
 ]
 
 const TONO: Record<Accion["tono"], string> = {

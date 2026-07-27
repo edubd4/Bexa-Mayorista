@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table"
 import { ROL } from "@/lib/constants"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
+import { puedeCargarProductos } from "@/lib/permisos"
 import { formatPesos } from "@/lib/utils"
 
 type ProductoRow = {
@@ -50,6 +51,8 @@ export default async function ProductosPage({
   if (!profile?.activo) redirect("/login")
 
   const esAdmin = profile.rol === ROL.ADMIN
+  // El vendedor también da de alta productos (0017), pero sigue sin ver costos.
+  const puedeCargar = puedeCargarProductos(profile.rol)
 
   // Matriz de columnas: vendedor lee la vista SIN costo. Defensa en profundidad:
   // aunque la RLS de `productos` es admin-only, el fetch va a la vista para vendedor.
@@ -126,7 +129,7 @@ export default async function ProductosPage({
               Catálogo, precios y stock. {esAdmin ? "Ves costos y comisiones." : "Los costos y comisiones son solo para admin."}
             </p>
           </div>
-          {esAdmin && (
+          {puedeCargar && (
             <Button asChild>
               <Link href={`${ent.ruta}/nuevo`}>
                 <Plus className="w-4 h-4" />

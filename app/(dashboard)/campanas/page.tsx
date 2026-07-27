@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/table"
 import { CampanaEstadoBadge } from "@/components/campanas/CampanaEstadoBadge"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
+import { puedeGestionarCampanas } from "@/lib/permisos"
 import { formatFecha, formatPesos } from "@/lib/utils"
 import type { EstadoCampanaEfectivo } from "@/lib/validators/campana"
 
@@ -38,6 +39,9 @@ export default async function CampanasPage({
   const { data: profile } = await supabase
     .from("profiles").select("rol, activo").eq("id", user.id).single()
   if (!profile?.activo) redirect("/login")
+
+  // El vendedor entra a mirar qué se está promocionando. No crea campañas.
+  const puedeGestionar = puedeGestionarCampanas(profile.rol)
 
   const q = (searchParams.q ?? "").trim()
   const estadoFilter = searchParams.estado ?? "todos"
@@ -81,12 +85,14 @@ export default async function CampanasPage({
                 Calendario
               </Link>
             </Button>
-            <Button asChild>
-              <Link href={`${ent.ruta}/nueva`}>
-                <Plus className="w-4 h-4" />
-                {nuevoLabel(ent)}
-              </Link>
-            </Button>
+            {puedeGestionar && (
+              <Button asChild>
+                <Link href={`${ent.ruta}/nueva`}>
+                  <Plus className="w-4 h-4" />
+                  {nuevoLabel(ent)}
+                </Link>
+              </Button>
+            )}
           </div>
         </header>
 

@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { CampanaForm } from "@/components/campanas/CampanaForm"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
+import { puedeGestionarCampanas } from "@/lib/permisos"
 
 export default async function NuevaCampanaPage() {
   const supabase = await createServerClient()
@@ -13,10 +14,15 @@ export default async function NuevaCampanaPage() {
   const { data: profile } = await supabase
     .from("profiles").select("rol, activo").eq("id", user.id).single()
   if (!profile?.activo) redirect("/login")
+  // Las campañas las crea marketing (y el admin). Ver 0017.
+  if (!puedeGestionarCampanas(profile.rol)) redirect(DOMINIO.campanas.ruta)
 
   const [{ data: canales }, { data: productos }] = await Promise.all([
     supabase.from("campana_canales").select("id, nombre").eq("activo", true).order("nombre"),
-    supabase.from("productos").select("id, id_publico, nombre, marca").eq("activo", true).order("nombre"),
+    // `productos_catalogo`, no `productos`: la tabla completa es admin-only por
+    // RLS, así que a un usuario de marketing el selector le venía VACÍO y no
+    // podía asociar productos a la campaña. El catálogo no trae costo.
+    supabase.from("productos_catalogo").select("id, id_publico, nombre, marca").eq("activo", true).order("nombre"),
   ])
 
   const ent = DOMINIO.campanas

@@ -3,7 +3,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { requireAuthenticated } from "@/lib/auth-guards"
+// Las campañas las gestiona marketing (y el admin). El vendedor las lee desde
+// las pantallas, pero ninguna de estas acciones le corresponde. Antes las 6
+// usaban requireAuthenticated (sin mirar rol) y la RLS era FOR ALL a cualquier
+// autenticado: un vendedor podía crear, editar presupuesto y borrar
+// publicaciones. Ver 0017.
+import { requireGestionCampanas } from "@/lib/auth-guards"
 import { TIPO_EVENTO } from "@/lib/constants"
 import { DOMINIO } from "@/lib/dominio"
 import { logHistorial } from "@/lib/historial"
@@ -44,7 +49,7 @@ export async function createCampana(input: CampanaInput): Promise<ActionResult> 
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
 
-  const guard = await requireAuthenticated()
+  const guard = await requireGestionCampanas()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
@@ -88,7 +93,7 @@ export async function updateCampana(id: string, input: CampanaInput): Promise<Ac
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
 
-  const guard = await requireAuthenticated()
+  const guard = await requireGestionCampanas()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
@@ -128,7 +133,7 @@ export async function cambiarEstadoManual(
   id: string,
   estado: EstadoCampanaManual | null,
 ): Promise<ActionResult> {
-  const guard = await requireAuthenticated()
+  const guard = await requireGestionCampanas()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
@@ -169,7 +174,7 @@ export async function updateMetricasManuales(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
 
-  const guard = await requireAuthenticated()
+  const guard = await requireGestionCampanas()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
@@ -191,7 +196,7 @@ export async function crearPublicacion(input: PublicacionInput): Promise<ActionR
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
 
-  const guard = await requireAuthenticated()
+  const guard = await requireGestionCampanas()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
@@ -211,13 +216,24 @@ export async function actualizarPublicacion(
   id: string,
   input: Partial<PublicacionInput>,
 ): Promise<ActionResult> {
-  const guard = await requireAuthenticated()
+  // Era la única de las 41 server actions sin Zod: hacía spread del input crudo,
+  // así que desde un cliente manipulado se podía escribir cualquier columna de
+  // campana_publicaciones — campana_id incluido, moviendo la publicación a otra
+  // campaña. Hallazgo 5 de la auditoría.
+  const parsed = publicacionSchema.partial().safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
+  }
+  // campana_id no se reasigna por esta vía: una publicación no cambia de campaña.
+  const { campana_id: _ignorado, ...campos } = parsed.data
+
+  const guard = await requireGestionCampanas()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
   const { data, error } = await supabase
     .from("campana_publicaciones")
-    .update({ ...input, updated_by: user.id })
+    .update({ ...campos, updated_by: user.id })
     .eq("id", id)
     .select("campana_id")
     .single()
@@ -229,7 +245,7 @@ export async function actualizarPublicacion(
 }
 
 export async function borrarPublicacion(id: string): Promise<ActionResult> {
-  const guard = await requireAuthenticated()
+  const guard = await requireGestionCampanas()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase } = guard
 

@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { CampanaForm } from "@/components/campanas/CampanaForm"
 import { DOMINIO } from "@/lib/dominio"
+import { puedeGestionarCampanas } from "@/lib/permisos"
 import type { CampanaInput, EstadoCampanaManual } from "@/lib/validators/campana"
 
 type Params = { params: { id: string } }
@@ -16,11 +17,15 @@ export default async function EditarCampanaPage({ params }: Params) {
   const { data: profile } = await supabase
     .from("profiles").select("rol, activo").eq("id", user.id).single()
   if (!profile?.activo) redirect("/login")
+  // Editar campañas es de marketing (y del admin). Ver 0017.
+  if (!puedeGestionarCampanas(profile.rol)) redirect(`${DOMINIO.campanas.ruta}/${params.id}`)
 
   const [{ data: campana }, { data: canales }, { data: productos }, { data: asigCanales }, { data: asigProductos }] = await Promise.all([
     supabase.from("campanas").select("*").eq("id", params.id).maybeSingle(),
     supabase.from("campana_canales").select("id, nombre").eq("activo", true).order("nombre"),
-    supabase.from("productos").select("id, id_publico, nombre, marca").eq("activo", true).order("nombre"),
+    // productos_catalogo, no productos: la tabla completa es admin-only y a
+    // marketing le llegaba el selector vacío. Ver la nota en nueva/page.tsx.
+    supabase.from("productos_catalogo").select("id, id_publico, nombre, marca").eq("activo", true).order("nombre"),
     supabase.from("campana_canal_asignaciones").select("canal_id").eq("campana_id", params.id),
     supabase.from("campana_productos").select("producto_id").eq("campana_id", params.id),
   ])
