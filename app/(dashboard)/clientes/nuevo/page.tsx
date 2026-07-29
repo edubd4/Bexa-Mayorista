@@ -3,8 +3,8 @@ import { redirect } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { ClienteForm } from "@/components/clientes/ClienteForm"
-import { ROL } from "@/lib/constants"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
+import { esAdmin as esRolAdmin, puedeCargarClientes } from "@/lib/permisos"
 
 export default async function NuevoClientePage() {
   const supabase = await createServerClient()
@@ -16,15 +16,25 @@ export default async function NuevoClientePage() {
     .select("rol, activo")
     .eq("id", user.id)
     .single()
-  if (profile?.rol !== ROL.ADMIN || !profile.activo) {
+  // El vendedor también da de alta clientes desde la 0028 (decisión del cliente
+  // 2026-07-29). Marketing sigue afuera: no carga fichas de clientes.
+  if (!profile?.activo || !puedeCargarClientes(profile.rol)) {
     redirect(DOMINIO.clientes.ruta)
   }
 
-  const { data: listasPrecios } = await supabase
-    .from("listas_precios")
-    .select("id, id_publico, nombre")
-    .eq("activo", true)
-    .order("nombre")
+  // La lista de precios del cliente la asigna SOLO el admin: define lo que paga
+  // en cada venta futura. Al vendedor ni se le renderiza el selector, y el
+  // trigger clientes_lista_precio_admin_only lo frena igual en la base si el
+  // payload llegara por otro lado.
+  const puedeAsignarLista = esRolAdmin(profile.rol)
+
+  const { data: listasPrecios } = puedeAsignarLista
+    ? await supabase
+        .from("listas_precios")
+        .select("id, id_publico, nombre")
+        .eq("activo", true)
+        .order("nombre")
+    : { data: [] }
 
   const ent = DOMINIO.clientes
 

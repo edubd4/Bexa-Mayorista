@@ -39,7 +39,6 @@ export default async function EditarCampanaPage({ params }: Params) {
     fecha_fin: campana.fecha_fin,
     estado_manual: campana.estado_manual as EstadoCampanaManual | null,
     presupuesto_estimado: Number(campana.presupuesto_estimado),
-    gasto_id: campana.gasto_id ?? undefined,
     notas: campana.notas ?? undefined,
     canal_ids: (asigCanales ?? []).map((r) => r.canal_id as number),
     producto_ids: (asigProductos ?? []).map((r) => r.producto_id as string),

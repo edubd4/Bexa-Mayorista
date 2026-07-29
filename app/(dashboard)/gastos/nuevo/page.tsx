@@ -18,11 +18,20 @@ export default async function NuevoGastoPage() {
     .single()
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
-  const { data: categorias } = await supabase
-    .from("categorias_gasto")
-    .select("id, nombre, descripcion")
-    .eq("activo", true)
-    .order("nombre")
+  const [{ data: categorias }, { data: campanas }] = await Promise.all([
+    supabase
+      .from("categorias_gasto")
+      .select("id, nombre, descripcion")
+      .eq("activo", true)
+      .order("nombre"),
+    // Para imputar el gasto a una campaña desde acá (0028). Las concluidas
+    // entran igual: la factura de la pauta llega después de que terminó.
+    supabase
+      .from("campanas")
+      .select("id, id_publico, nombre")
+      .order("fecha_inicio", { ascending: false })
+      .limit(100),
+  ])
 
   const ent = DOMINIO.gastos
 
@@ -51,6 +60,7 @@ export default async function NuevoGastoPage() {
 
         <GastoForm
           categorias={(categorias ?? []) as { id: number; nombre: string; descripcion: string | null }[]}
+          campanas={(campanas ?? []) as { id: string; id_publico: string; nombre: string }[]}
         />
       </div>
     </div>

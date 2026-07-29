@@ -33,7 +33,6 @@ const DEFAULTS: CampanaInput = {
   fecha_fin: "",
   estado_manual: null,
   presupuesto_estimado: 0,
-  gasto_id: undefined,
   notas: undefined,
   canal_ids: [],
   producto_ids: [],
@@ -138,7 +137,9 @@ export function CampanaForm({ mode, campanaId, initial, canales, productos }: Pr
               onChange={(v) => update("presupuesto_estimado", v ?? 0)}
             />
             <p className="text-xs text-app-muted">
-              Referencia visual. El costo real se toma del gasto asociado (si hay).
+              Lo que planeás gastar. El costo REAL se carga desde la ficha de la
+              campaña, en &ldquo;Costos de la campaña&rdquo;: cada carga es un gasto
+              que sale de la caja y alimenta el ROI.
             </p>
           </div>
         </div>

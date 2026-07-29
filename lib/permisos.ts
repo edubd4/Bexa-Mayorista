@@ -9,8 +9,10 @@ import { ROL, type Rol } from "@/lib/constants"
 // otra:
 //
 //   puedeGestionarCampanas    ←→  public.puede_gestionar_campanas()   (0017)
-//   puedeCargarProductos      ←→  check de rol en crear_producto_vendedor() (0017)
+//   puedeCargarProductos      ←→  public.puede_cargar_catalogo()      (0028)
+//   puedeCargarClientes       ←→  public.puede_cargar_catalogo()      (0028)
 //   puedeCargarStockVendedor  ←→  checks de registrar_stock_vendedor() (0020)
+//   puedeRegistrarGastos      ←→  checks de rol en registrar_gasto()  (0028)
 //
 // Estas funciones deciden qué se MUESTRA. Nunca son la única defensa: la server
 // action valida de nuevo con su guard, y la RLS valida de nuevo en la base.
@@ -29,8 +31,35 @@ export function puedeGestionarCampanas(rol: RolInput): boolean {
 }
 
 // Catálogo: lo cargan admin y vendedor. Marketing no carga mercadería.
+// Desde la 0028 esto ya no es solo el ALTA: el vendedor también EDITA y DA DE
+// BAJA productos (decisión del cliente 2026-07-29). Lo único que sigue siendo
+// exclusivo del admin es `comision_pct` y el costo como dato de LECTURA.
 export function puedeCargarProductos(rol: RolInput): boolean {
   return rol === ROL.ADMIN || rol === ROL.COLABORADOR
+}
+
+// Clientes: mismo criterio que el catálogo desde la 0028 — el vendedor da de
+// alta, edita y da de baja a sus clientes. Función aparte y no un alias de
+// `puedeCargarProductos` porque son dos permisos distintos que hoy coinciden:
+// el día que el cliente quiera separarlos, se cambia acá y no hay que ir a
+// buscar cuál de las dos cosas significaba cada llamada.
+export function puedeCargarClientes(rol: RolInput): boolean {
+  return rol === ROL.ADMIN || rol === ROL.COLABORADOR
+}
+
+// Gastos (0028): el admin registra cualquiera. Marketing SOLO gastos de
+// publicidad imputados a una campaña — es el dueño de las campañas y necesita
+// cargar lo que gasta, pero la caja del resto del negocio no es asunto suyo.
+// El RPC registrar_gasto vuelve a validar las dos condiciones en SQL.
+export function puedeRegistrarGastos(rol: RolInput): boolean {
+  return rol === ROL.ADMIN || rol === ROL.MARKETING
+}
+
+// La lista de precios de un cliente define lo que paga en CADA venta futura
+// (resolver_precio la lee). Es política de precios: admin-only por CLAUDE.md.
+// Espeja al trigger clientes_lista_precio_admin_only (0028).
+export function puedeAsignarListaPrecios(rol: RolInput): boolean {
+  return rol === ROL.ADMIN
 }
 
 // El costo y la comisión del producto son SOLO del admin. Es la regla de oro

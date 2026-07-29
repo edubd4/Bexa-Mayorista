@@ -42,7 +42,9 @@ const campanaBase = z.object({
   fecha_fin:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"),
   estado_manual:        z.nativeEnum(ESTADO_CAMPANA_MANUAL).nullable().optional(),
   presupuesto_estimado: z.coerce.number().min(0).default(0),
-  gasto_id:             z.preprocess(emptyToUndef, zUuid().optional()),
+  // `gasto_id` se fue en la 0028. Era 1:1, nunca tuvo input en el form y por
+  // eso el ROI vino en null desde el día uno. El costo real ahora son N gastos
+  // imputados con `gastos.campana_id` — se cargan desde la ficha de la campaña.
   notas:                z.preprocess(emptyToUndef, z.string().trim().max(2000).optional()),
   // M:N — enviadas como arrays de IDs
   canal_ids:            z.array(z.coerce.number().int().positive()).default([]),

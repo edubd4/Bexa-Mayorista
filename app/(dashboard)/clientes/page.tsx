@@ -15,8 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ROL } from "@/lib/constants"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
+import { puedeCargarClientes } from "@/lib/permisos"
 import { TIPO_CLIENTE_LABEL, TIPO_CLIENTE_VARIANT } from "@/lib/clientes-ui"
 import { nombreVisible, type TipoCliente } from "@/lib/validators/cliente"
 
@@ -49,7 +49,8 @@ export default async function ClientesPage({
     .single()
   if (!profile?.activo) redirect("/login")
 
-  const esAdmin = profile.rol === ROL.ADMIN
+  // El alta de clientes es del admin y del vendedor desde la 0028.
+  const puedeGestionar = puedeCargarClientes(profile.rol)
 
   const q = (searchParams.q ?? "").trim()
   const estadoFilter = searchParams.estado === "inactivos" ? false
@@ -100,7 +101,7 @@ export default async function ClientesPage({
               A quién le vendemos. Mayoristas con lista propia; minoristas al precio base.
             </p>
           </div>
-          {esAdmin && (
+          {puedeGestionar && (
             <Button asChild>
               <Link href={`${ent.ruta}/nuevo`}>
                 <Plus className="w-4 h-4" />

@@ -14,9 +14,13 @@ import { METODO_PAGO, type GastoInput, type MetodoPago } from "@/lib/validators/
 import { METODO_PAGO_LABEL } from "@/lib/caja-ui"
 
 type Categoria = { id: number; nombre: string; descripcion: string | null }
+type Campana = { id: string; id_publico: string; nombre: string }
 
 type Props = {
   categorias: Categoria[]
+  // Imputar el gasto a una campaña (0028): es lo que le da costo real al ROI.
+  // Opcional — la mayoría de los gastos del negocio no son de publicidad.
+  campanas?: Campana[]
 }
 
 function hoyISO(): string {
@@ -27,7 +31,7 @@ function hoyISO(): string {
   return `${yyyy}-${mm}-${dd}`
 }
 
-export function GastoForm({ categorias }: Props) {
+export function GastoForm({ categorias, campanas = [] }: Props) {
   const toast = useToast()
   const [categoriaId, setCategoriaId] = useState<number | "">(categorias[0]?.id ?? "")
   const [monto, setMonto] = useState<number | null>(null)
@@ -35,6 +39,7 @@ export function GastoForm({ categorias }: Props) {
   const [fecha, setFecha] = useState(hoyISO())
   const [metodo, setMetodo] = useState<MetodoPago>(METODO_PAGO.EFECTIVO)
   const [notas, setNotas] = useState("")
+  const [campanaId, setCampanaId] = useState<string>("")
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -52,6 +57,7 @@ export function GastoForm({ categorias }: Props) {
       fecha,
       metodo,
       notas: notas.trim() || undefined,
+      campana_id: campanaId || undefined,
     }
     startTransition(async () => {
       const res = await registrarGasto(payload)
@@ -130,6 +136,26 @@ export function GastoForm({ categorias }: Props) {
             className="w-full h-10 px-3 rounded-md bg-app-input border border-app-line text-sm text-app-text focus:outline-none focus:border-app-accent/50"
           />
         </div>
+        {campanas.length > 0 && (
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="campana">Campaña</Label>
+            <Select
+              id="campana"
+              value={campanaId}
+              onChange={(e) => setCampanaId(e.target.value)}
+            >
+              <option value="">— Sin campaña —</option>
+              {campanas.map((c) => (
+                <option key={c.id} value={c.id}>{c.id_publico} · {c.nombre}</option>
+              ))}
+            </Select>
+            <p className="text-[11px] text-app-muted font-mono">
+              Si este gasto es publicidad de una campaña, elegila: el monto entra
+              en su costo y el ROI se calcula solo. El gasto sale de la caja una
+              sola vez, acá o desde la ficha de la campaña — es el mismo registro.
+            </p>
+          </div>
+        )}
         <div className="space-y-2 md:col-span-2">
           <Label htmlFor="notas">Notas</Label>
           <Textarea id="notas" rows={3} value={notas} onChange={(e) => setNotas(e.target.value)} />

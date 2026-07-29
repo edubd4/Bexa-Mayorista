@@ -1,16 +1,21 @@
 import Link from "next/link"
 import { redirect, notFound } from "next/navigation"
-import { ArrowLeft, Pencil, Receipt } from "lucide-react"
+import { ArrowLeft, Pencil } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { CampanaEstadoBadge } from "@/components/campanas/CampanaEstadoBadge"
 import { CambiarEstadoButtons } from "@/components/campanas/CambiarEstadoButtons"
+import {
+  CampanaGastosManager,
+  type CampanaGasto,
+  type CategoriaGasto,
+} from "@/components/campanas/CampanaGastosManager"
 import { MetricasCard } from "@/components/campanas/MetricasCard"
 import { MetricasManualesForm } from "@/components/campanas/MetricasManualesForm"
 import { PublicacionesManager } from "@/components/campanas/PublicacionesManager"
 import { DOMINIO } from "@/lib/dominio"
-import { puedeGestionarCampanas } from "@/lib/permisos"
+import { esAdmin, puedeGestionarCampanas, puedeRegistrarGastos } from "@/lib/permisos"
 import { formatFecha, formatPesos } from "@/lib/utils"
 import type {
   EstadoCampanaEfectivo,
@@ -31,7 +36,8 @@ type CampanaFull = {
   estado_manual: EstadoCampanaManual | null
   estado_efectivo: EstadoCampanaEfectivo
   presupuesto_estimado: number
-  gasto_id: string | null
+  // Suma de TODOS los gastos imputados a la campaña, anulados afuera (0028).
+  // Antes era el monto de un único gasto que nadie podía cargar.
   costo_real: number | null
   metricas_manuales: MetricasManuales
   notas: string | null
@@ -49,6 +55,11 @@ export default async function CampanaDetalle({ params }: Params) {
   // El vendedor lee la ficha completa (necesita saber qué se promociona y con
   // qué productos para vender), pero no ve ningún control que la modifique.
   const puedeGestionar = puedeGestionarCampanas(profile.rol)
+  // Costos (0028): los carga admin y marketing. Anular sigue siendo admin-only
+  // — devuelve plata a la caja (0023). Y marketing queda limitado a categorías
+  // de publicidad, condición que el RPC vuelve a exigir en SQL.
+  const puedeCargarCostos = puedeRegistrarGastos(profile.rol)
+  const soyAdmin = esAdmin(profile.rol)
 
   const [{ data: campanaRaw }, { data: canalesTodos }] = await Promise.all([
     supabase.from("v_campanas").select("*").eq("id", params.id).maybeSingle(),
@@ -63,15 +74,24 @@ export default async function CampanaDetalle({ params }: Params) {
     { data: asigCanales },
     { data: asigProductos },
     { data: publicacionesRaw },
-    { data: gasto },
+    { data: gastosRaw },
+    { data: categoriasRaw },
   ] = await Promise.all([
     supabase.from("v_campana_metricas").select("*").eq("campana_id", campana.id).maybeSingle(),
     supabase.from("campana_canal_asignaciones").select("canal_id, canal:canal_id(nombre)").eq("campana_id", campana.id),
     supabase.from("campana_productos").select("producto_id, producto:producto_id(id_publico, nombre, marca)").eq("campana_id", campana.id),
     supabase.from("campana_publicaciones").select("id, id_publico, canal_id, titulo, cuerpo, fecha_publicacion, estado").eq("campana_id", campana.id).order("created_at", { ascending: false }),
-    campana.gasto_id
-      ? supabase.from("gastos").select("id, id_publico, monto, descripcion, fecha").eq("id", campana.gasto_id).maybeSingle()
-      : Promise.resolve({ data: null }),
+    // Los gastos van por v_campana_gastos y no por `gastos`: esa tabla es
+    // admin-only y marketing tiene que ver el costo de SUS campañas. La vista
+    // filtra `campana_id is not null`, así que nunca expone la caja general.
+    supabase
+      .from("v_campana_gastos")
+      .select("id, id_publico, monto, descripcion, fecha, metodo_pago, categoria_nombre, anulado_at, anulado_motivo")
+      .eq("campana_id", campana.id)
+      .order("fecha", { ascending: false }),
+    puedeCargarCostos
+      ? supabase.from("categorias_gasto").select("id, nombre, es_publicidad").eq("activo", true).order("nombre")
+      : Promise.resolve({ data: [] }),
   ])
 
   const metricas = (metricasRaw ?? {
@@ -100,6 +120,9 @@ export default async function CampanaDetalle({ params }: Params) {
     fecha_publicacion: string | null; estado: EstadoPublicacion
   }>)
 
+  const gastos = (gastosRaw ?? []) as unknown as CampanaGasto[]
+  const categoriasGasto = (categoriasRaw ?? []) as unknown as CategoriaGasto[]
+
   const ent = DOMINIO.campanas
 
   return (
@@ -124,6 +147,17 @@ export default async function CampanaDetalle({ params }: Params) {
               {formatFecha(campana.fecha_inicio)} → {formatFecha(campana.fecha_fin)}
               {" · "}
               Presupuesto {formatPesos(Number(campana.presupuesto_estimado))}
+              {" · "}
+              {/* Presupuesto es lo que se pensaba gastar; invertido es lo que
+                  salió de la caja de verdad. Juntos porque la diferencia entre
+                  los dos es la pregunta que el cliente se hace todos los días. */}
+              <span className={
+                Number(campana.costo_real ?? 0) > Number(campana.presupuesto_estimado)
+                  ? "text-app-red"
+                  : "text-app-secondary"
+              }>
+                Invertido {formatPesos(Number(campana.costo_real ?? 0))}
+              </span>
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -168,28 +202,29 @@ export default async function CampanaDetalle({ params }: Params) {
           )}
         </section>
 
-        {/* Descripción + gasto asociado */}
-        {(campana.descripcion || gasto || campana.notas) && (
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {/* Costos reales (0028). Va pegado a las métricas a propósito: el ROI
+            de arriba se calcula con esta suma, y verlos separados fue
+            justamente lo que hizo que nadie notara que el costo estaba vacío. */}
+        <CampanaGastosManager
+          campanaId={campana.id}
+          gastos={gastos}
+          categorias={categoriasGasto}
+          puedeCargar={puedeCargarCostos}
+          puedeAnular={soyAdmin}
+          soloPublicidad={!soyAdmin}
+        />
+
+        {/* Descripción + notas */}
+        {(campana.descripcion || campana.notas) && (
+          <section className="grid grid-cols-1 gap-3">
             {campana.descripcion && (
-              <div className="rounded-xl border border-app-line-soft bg-app-card p-5 md:col-span-2">
+              <div className="rounded-xl border border-app-line-soft bg-app-card p-5">
                 <h3 className="font-display font-semibold text-sm mb-2">Descripción</h3>
                 <p className="text-sm text-app-secondary whitespace-pre-wrap">{campana.descripcion}</p>
               </div>
             )}
-            {gasto && (
-              <div className="rounded-xl border border-app-line-soft bg-app-card p-5">
-                <h3 className="font-display font-semibold text-sm mb-2 flex items-center gap-1.5">
-                  <Receipt className="w-3.5 h-3.5 text-app-amber" /> Gasto asociado
-                </h3>
-                <p className="font-mono text-[10.5px] text-app-accent">{gasto.id_publico}</p>
-                <p className="text-sm mt-1">{gasto.descripcion}</p>
-                <p className="text-sm font-mono text-app-red mt-1">-{formatPesos(Number(gasto.monto))}</p>
-                <p className="text-xs text-app-muted mt-1">{formatFecha(gasto.fecha)}</p>
-              </div>
-            )}
             {campana.notas && (
-              <div className="rounded-xl border border-app-line-soft bg-app-card p-5 md:col-span-3">
+              <div className="rounded-xl border border-app-line-soft bg-app-card p-5">
                 <h3 className="font-display font-semibold text-sm mb-2">Notas internas</h3>
                 <p className="text-sm text-app-secondary whitespace-pre-wrap">{campana.notas}</p>
               </div>

@@ -82,6 +82,10 @@ export const gastoSchema = z.object({
     METODO_PAGO.MERCADO_PAGO,   METODO_PAGO.CHEQUE, METODO_PAGO.OTRO,
   ]).default(METODO_PAGO.EFECTIVO),
   notas:        z.preprocess(emptyToUndef, z.string().trim().max(1000).optional()),
+  // Campaña a la que se imputa (0028). Opcional para el admin: la mayoría de
+  // los gastos no son de publicidad. OBLIGATORIO para marketing — el RPC lo
+  // rechaza sin campaña. Es lo que hace que el ROI tenga con qué calcular.
+  campana_id:   z.preprocess(emptyToUndef, zUuid().optional()),
 })
 export type GastoInput = z.infer<typeof gastoSchema>
 
