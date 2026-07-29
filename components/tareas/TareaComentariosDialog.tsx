@@ -16,12 +16,22 @@ import { cn } from "@/lib/utils"
 
 // La conversación de la tarea (0026): comentarios inmutables con "visto",
 // para no tener que avisarse por afuera. Abrir el diálogo marca como leídos
-// los mensajes de otros — abrir ES leer. El badge naranja avisa cuántos
-// mensajes nuevos hay. Vive dentro de una LinkRow → stopPropagation.
+// los mensajes de otros — abrir ES leer. Vive dentro de una LinkRow →
+// stopPropagation.
+//
+// TRES ESTADOS, y que se distingan de un vistazo (0029). Antes el globito solo
+// se pintaba si había pendientes: una tarea con la conversación entera leída se
+// veía IDÉNTICA a una sin un solo mensaje, así que la charla desaparecía apenas
+// la abrías una vez. Ahora:
+//   sin mensajes   → gris pelado, no hay nada que leer
+//   sin leer  (>0) → ROJO con el número de pendientes
+//   al día    (>0) → VERDE con el total: hay conversación y estás al día
 type Props = {
   tareaId: string
   tareaNombre: string
   noLeidos: number
+  /** Total de mensajes de la tarea, los propios incluidos. */
+  total: number
   usuarioId: string
 }
 
@@ -35,7 +45,13 @@ function horaCorta(ts: string): string {
   })
 }
 
-export function TareaComentariosDialog({ tareaId, tareaNombre, noLeidos, usuarioId }: Props) {
+export function TareaComentariosDialog({
+  tareaId,
+  tareaNombre,
+  noLeidos,
+  total,
+  usuarioId,
+}: Props) {
   const router = useRouter()
   const toast = useToast()
   const [open, setOpen] = useState(false)
@@ -43,6 +59,11 @@ export function TareaComentariosDialog({ tareaId, tareaNombre, noLeidos, usuario
   const [comentarios, setComentarios] = useState<ComentarioTarea[]>([])
   const [texto, setTexto] = useState("")
   const [isPending, startTransition] = useTransition()
+
+  // Mientras el diálogo está abierto los mensajes ya están leídos: no tiene
+  // sentido que el globito de atrás siga en rojo mientras los estás mirando.
+  const hayPendientes = noLeidos > 0 && !open
+  const hayCharla = total > 0
 
   function handleOpenChange(abierto: boolean) {
     setOpen(abierto)
@@ -74,6 +95,9 @@ export function TareaComentariosDialog({ tareaId, tareaNombre, noLeidos, usuario
       }
       if (res.data) setComentarios((prev) => [...prev, res.data!])
       setTexto("")
+      // El total del globito subió: sin esto la fila de atrás sigue mostrando
+      // el número viejo hasta la próxima navegación.
+      router.refresh()
     })
   }
 
@@ -85,16 +109,42 @@ export function TareaComentariosDialog({ tareaId, tareaNombre, noLeidos, usuario
           onClick={(e) => e.stopPropagation()}
           className={cn(
             "relative inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors",
-            noLeidos > 0
-              ? "text-app-accent hover:bg-app-accent/10"
-              : "text-app-muted hover:text-app-accent hover:bg-app-accent/10",
+            hayPendientes
+              ? "text-app-red hover:bg-app-red/10"
+              : hayCharla
+                ? "text-app-green hover:bg-app-green/10"
+                : "text-app-muted hover:text-app-accent hover:bg-app-accent/10",
           )}
-          aria-label={`Comentarios de ${tareaNombre}${noLeidos > 0 ? ` (${noLeidos} sin leer)` : ""}`}
+          // El aria-label dice lo mismo que el color: quien navega con lector de
+          // pantalla no ve el rojo ni el verde.
+          aria-label={
+            hayPendientes
+              ? `Comentarios de ${tareaNombre} · ${noLeidos} sin leer`
+              : hayCharla
+                ? `Comentarios de ${tareaNombre} · ${total} ${total === 1 ? "mensaje leído" : "mensajes leídos"}`
+                : `Comentarios de ${tareaNombre} · sin mensajes`
+          }
+          title={
+            hayPendientes
+              ? `${noLeidos} sin leer`
+              : hayCharla
+                ? `${total} ${total === 1 ? "mensaje" : "mensajes"} · al día`
+                : "Sin mensajes"
+          }
         >
           <MessageCircle className="w-4 h-4" />
-          {noLeidos > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-app-accent text-[10px] font-mono font-bold text-black flex items-center justify-center">
-              {noLeidos > 9 ? "9+" : noLeidos}
+          {(hayPendientes || hayCharla) && (
+            <span
+              className={cn(
+                "absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-mono font-bold flex items-center justify-center",
+                hayPendientes
+                  ? "bg-app-red text-white"
+                  : "bg-app-green/20 text-app-green border border-app-green/40",
+              )}
+            >
+              {hayPendientes
+                ? (noLeidos > 9 ? "9+" : noLeidos)
+                : (total > 9 ? "9+" : total)}
             </span>
           )}
         </button>

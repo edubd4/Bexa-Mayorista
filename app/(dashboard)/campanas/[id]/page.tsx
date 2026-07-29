@@ -84,11 +84,18 @@ export default async function CampanaDetalle({ params }: Params) {
     // Los gastos van por v_campana_gastos y no por `gastos`: esa tabla es
     // admin-only y marketing tiene que ver el costo de SUS campañas. La vista
     // filtra `campana_id is not null`, así que nunca expone la caja general.
-    supabase
-      .from("v_campana_gastos")
-      .select("id, id_publico, monto, descripcion, fecha, metodo_pago, categoria_nombre, anulado_at, anulado_motivo")
-      .eq("campana_id", campana.id)
-      .order("fecha", { ascending: false }),
+    //
+    // SOLO para quien gestiona costos. El vendedor sigue viendo el AGREGADO en
+    // las métricas (costo y ROI, como desde la 0011) pero no el detalle factura
+    // por factura: cuánto se le paga a cada proveedor de pauta no es asunto
+    // suyo, y la vista no tiene security_invoker que lo frene por sí sola.
+    puedeCargarCostos
+      ? supabase
+          .from("v_campana_gastos")
+          .select("id, id_publico, monto, descripcion, fecha, metodo_pago, categoria_nombre, anulado_at, anulado_motivo")
+          .eq("campana_id", campana.id)
+          .order("fecha", { ascending: false })
+      : Promise.resolve({ data: [] }),
     puedeCargarCostos
       ? supabase.from("categorias_gasto").select("id, nombre, es_publicidad").eq("activo", true).order("nombre")
       : Promise.resolve({ data: [] }),
@@ -204,15 +211,18 @@ export default async function CampanaDetalle({ params }: Params) {
 
         {/* Costos reales (0028). Va pegado a las métricas a propósito: el ROI
             de arriba se calcula con esta suma, y verlos separados fue
-            justamente lo que hizo que nadie notara que el costo estaba vacío. */}
-        <CampanaGastosManager
-          campanaId={campana.id}
-          gastos={gastos}
-          categorias={categoriasGasto}
-          puedeCargar={puedeCargarCostos}
-          puedeAnular={soyAdmin}
-          soloPublicidad={!soyAdmin}
-        />
+            justamente lo que hizo que nadie notara que el costo estaba vacío.
+            El vendedor no ve este bloque — le queda el agregado en las métricas. */}
+        {puedeCargarCostos && (
+          <CampanaGastosManager
+            campanaId={campana.id}
+            gastos={gastos}
+            categorias={categoriasGasto}
+            puedeCargar={puedeCargarCostos}
+            puedeAnular={soyAdmin}
+            soloPublicidad={!soyAdmin}
+          />
+        )}
 
         {/* Descripción + notas */}
         {(campana.descripcion || campana.notas) && (

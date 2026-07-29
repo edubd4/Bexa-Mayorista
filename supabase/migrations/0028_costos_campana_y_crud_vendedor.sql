@@ -132,6 +132,21 @@ begin
 
   v_rol := public.current_user_rol();
 
+  -- Quién puede registrar qué (0028):
+  --   admin     → cualquier gasto, con o sin campaña. Como siempre.
+  --   marketing → SOLO categoría de publicidad Y SOLO imputado a una campaña.
+  --               Es el dueño de las campañas (0017) y necesita cargar lo que
+  --               gasta; la caja del resto del negocio no es asunto suyo.
+  --   el resto  → nada.
+  --
+  -- El portazo va PRIMERO, antes de mirar la categoría: si no, un vendedor que
+  -- llama al RPC a mano recibe 'Categoría no encontrada' o el nombre de la
+  -- categoría en el mensaje de error, y eso ya le confirma qué ids existen.
+  -- Que el que no tiene permiso no aprenda NADA del intento.
+  if v_rol is null or v_rol not in ('admin', 'marketing') then
+    raise exception 'No tenés permiso para registrar gastos';
+  end if;
+
   if p_monto is null or p_monto <= 0 then raise exception 'Monto debe ser > 0'; end if;
   if p_descripcion is null or length(trim(p_descripcion)) = 0 then
     raise exception 'Descripción requerida';
@@ -143,23 +158,13 @@ begin
     raise exception 'Categoría de gasto no encontrada o inactiva';
   end if;
 
-  -- Quién puede registrar qué (0028):
-  --   admin     → cualquier gasto, con o sin campaña. Como siempre.
-  --   marketing → SOLO categoría de publicidad Y SOLO imputado a una campaña.
-  --               Es el dueño de las campañas (0017) y necesita cargar lo que
-  --               gasta; la caja del resto del negocio no es asunto suyo.
-  --   el resto  → nada.
-  if v_rol = 'admin' then
-    null;
-  elsif v_rol = 'marketing' then
+  if v_rol = 'marketing' then
     if p_campana_id is null then
       raise exception 'Marketing solo puede registrar gastos imputados a una campaña';
     end if;
     if not v_categoria.es_publicidad then
       raise exception 'La categoría % no es de publicidad. Marketing solo carga gastos de publicidad.', v_categoria.nombre;
     end if;
-  else
-    raise exception 'No tenés permiso para registrar gastos';
   end if;
 
   -- La campaña tiene que existir. Sin este check, un campana_id inventado
@@ -706,3 +711,16 @@ comment on function public.eliminar_cliente is
 
 revoke all on function public.eliminar_cliente from public, anon;
 grant execute on function public.eliminar_cliente to authenticated;
+
+
+-- ============================================================================
+-- CIERRE · Refrescar el cache de esquema de PostgREST
+--
+-- `registrar_gasto` CAMBIÓ DE FIRMA (sumó p_campana_id). PostgREST cachea las
+-- firmas de las funciones y resuelve los RPC contra ese cache. Si no se
+-- refresca, la app sigue viendo la firma vieja y toda carga de gasto muere con
+-- "Could not find the function public.registrar_gasto(p_campana_id, ...) in the
+-- schema cache" — con la migración YA aplicada y todo en orden en la base.
+-- Supabase suele recargar solo por event trigger, pero cuesta una línea
+-- asegurarlo y evita un incidente en producción por algo que no es un bug.
+notify pgrst, 'reload schema';

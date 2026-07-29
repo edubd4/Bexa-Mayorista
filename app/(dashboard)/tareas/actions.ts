@@ -296,6 +296,8 @@ export async function listarComentarios(
   }
 
   revalidatePath(DOMINIO.tareas.ruta)
+  revalidatePath(`${DOMINIO.tareas.ruta}/${tareaId}`)
+  revalidatePath("/panel")
   return {
     ok: true,
     data: comentarios.map((c) => ({
@@ -336,7 +338,11 @@ export async function enviarComentario(
     autor: { nombre: string } | null
   }
 
+  // El Panel muestra el aviso global de mensajes sin leer (0029) y la ficha
+  // tiene su propio globito: los tres tienen que enterarse del mensaje nuevo.
   revalidatePath(DOMINIO.tareas.ruta)
+  revalidatePath(`${DOMINIO.tareas.ruta}/${parsed.data.tarea_id}`)
+  revalidatePath("/panel")
   return {
     ok: true,
     data: {

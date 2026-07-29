@@ -154,8 +154,10 @@ export default async function TareasPage({
     esAdmin
       ? supabase.from("profiles").select("id, nombre").eq("activo", true).order("nombre")
       : Promise.resolve({ data: [] }),
-    // Badge de mensajes: comentarios de otros sin MI lectura (la RLS filtra).
-    supabase.rpc("comentarios_no_leidos"),
+    // Estado del globito por tarea (0029): total de mensajes + cuántos me
+    // faltan leer. Antes solo se pedían los pendientes, y una conversación
+    // leída quedaba indistinguible de una tarea sin mensajes.
+    supabase.rpc("resumen_comentarios_tareas"),
   ])
 
   const catalogoTodo = (catalogoRes.data ?? []) as unknown as TareaRow[]
@@ -163,11 +165,13 @@ export default async function TareasPage({
   const atrasadas = (atrasadasRes.data ?? []) as unknown as OcurrenciaRow[]
   const historial = (historialRes.data ?? []) as unknown as HistorialRow[]
   const usuarios = (usuariosRes.data ?? []) as { id: string; nombre: string }[]
-  const noLeidosPorTarea = new Map(
-    ((noLeidosRes.data ?? []) as { tarea_id: string; no_leidos: number }[])
-      .map((r) => [r.tarea_id, Number(r.no_leidos)]),
+  const resumenComentarios = new Map(
+    ((noLeidosRes.data ?? []) as { tarea_id: string; total: number; no_leidos: number }[])
+      .map((r) => [r.tarea_id, { total: Number(r.total), noLeidos: Number(r.no_leidos) }]),
   )
-  const totalNoLeidos = Array.from(noLeidosPorTarea.values()).reduce((a, b) => a + b, 0)
+  const SIN_MENSAJES = { total: 0, noLeidos: 0 }
+  const totalNoLeidos = Array.from(resumenComentarios.values())
+    .reduce((a, r) => a + r.noLeidos, 0)
 
   const ocurrenciaHoy = new Map(deHoy.map((o) => [o.tarea_id, o]))
   const tareasAtrasadas = new Set(atrasadas.map((o) => o.tarea_id))
@@ -239,9 +243,12 @@ export default async function TareasPage({
             </h1>
             <p className="text-app-secondary mt-1">
               {formatFecha(hoy)} · {esAdmin ? "el día de todo el equipo" : "tu día, ordenado por horario"}
+              {/* Rojo, igual que los globitos de las filas: si el aviso de
+                  arriba y la marca de la fila no son del mismo color, no se
+                  leen como la misma cosa. */}
               {totalNoLeidos > 0 && (
-                <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-app-accent/40 bg-app-accent/10 px-2 py-0.5 font-mono text-[11px] text-app-accent align-middle">
-                  💬 {totalNoLeidos} {totalNoLeidos === 1 ? "mensaje nuevo" : "mensajes nuevos"}
+                <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-app-red/40 bg-app-red/10 px-2 py-0.5 font-mono text-[11px] text-app-red align-middle">
+                  💬 {totalNoLeidos} {totalNoLeidos === 1 ? "mensaje sin leer" : "mensajes sin leer"}
                 </span>
               )}
             </p>
@@ -462,7 +469,8 @@ export default async function TareasPage({
                               <TareaComentariosDialog
                                 tareaId={t.id}
                                 tareaNombre={t.nombre}
-                                noLeidos={noLeidosPorTarea.get(t.id) ?? 0}
+                                noLeidos={(resumenComentarios.get(t.id) ?? SIN_MENSAJES).noLeidos}
+                                total={(resumenComentarios.get(t.id) ?? SIN_MENSAJES).total}
                                 usuarioId={user.id}
                               />
                             </TableCell>
@@ -512,6 +520,21 @@ export default async function TareasPage({
                       </TableCell>
                       <TableCell className="py-2.5 text-right">
                         <EstadoTareaSelect ocurrenciaId={o.id} estado={o.estado} />
+                      </TableCell>
+                      {/* El globito TAMBIÉN acá (0029). Faltaba, y esta es
+                          justamente la tabla donde más se necesita: una tarea
+                          atrasada es sobre la que alguien tiene algo que
+                          explicar ("no llegué", "faltaba el repuesto"). Si el
+                          único lugar para escribir está en la tabla de arriba,
+                          la explicación termina en el WhatsApp de alguien. */}
+                      <TableCell className="py-2.5 w-10 text-right">
+                        <TareaComentariosDialog
+                          tareaId={o.tarea_id}
+                          tareaNombre={t?.nombre ?? "Tarea"}
+                          noLeidos={(resumenComentarios.get(o.tarea_id) ?? SIN_MENSAJES).noLeidos}
+                          total={(resumenComentarios.get(o.tarea_id) ?? SIN_MENSAJES).total}
+                          usuarioId={user.id}
+                        />
                       </TableCell>
                     </TableRow>
                   )

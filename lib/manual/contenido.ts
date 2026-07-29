@@ -335,7 +335,7 @@ export const SECCIONES: SeccionManual[] = [
         nivel: "info",
         titulo: "La conversación de cada tarea vive en la tarea",
         texto:
-          "El globito de la fila abre los comentarios: dudas, avisos, 'faltó tal cosa' — todo queda escrito ahí, con quién lo dijo, a qué hora y quién lo leyó (✓✓). Si tenés mensajes sin leer, el globito muestra el número y arriba de la pantalla te avisa. No hace falta escribirse por WhatsApp por cosas del trabajo: dejalo en la tarea, que mañana también sirve.",
+          "El globito de la fila abre los comentarios: dudas, avisos, 'faltó tal cosa' — todo queda escrito ahí, con quién lo dijo, a qué hora y quién lo leyó (✓✓). Mirá el color: GRIS y sin número es que no hay ningún mensaje; ROJO con un número son los mensajes sin leer que tenés esperando; VERDE con un número es que hay conversación y ya está leída. Además el Panel te avisa apenas entrás si tenés algo sin leer, y el globito está también en las tareas atrasadas y en la ficha de cada tarea. No hace falta escribirse por WhatsApp por cosas del trabajo: dejalo en la tarea, que mañana también sirve.",
       },
       {
         tipo: "aviso",

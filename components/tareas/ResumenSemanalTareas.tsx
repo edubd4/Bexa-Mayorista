@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { MessageCircle } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { DOMINIO } from "@/lib/dominio"
 import { ahoraArgentina, toISODate } from "@/lib/fechas"
@@ -24,7 +25,7 @@ export async function ResumenSemanalTareas({ esAdmin }: { esAdmin: boolean }) {
   lunes.setDate(ahoraAR.getDate() - ((ahoraAR.getDay() + 6) % 7))
   const inicioSemana = toISODate(lunes)
 
-  const [{ data: ocs }, { data: tareas }] = await Promise.all([
+  const [{ data: ocs }, { data: tareas }, { data: resumenRows }] = await Promise.all([
     supabase
       .from("tarea_ocurrencias")
       .select("tarea_id, fecha, estado")
@@ -34,7 +35,15 @@ export async function ResumenSemanalTareas({ esAdmin }: { esAdmin: boolean }) {
       .from("tareas")
       .select("id, asignado:asignado_a ( nombre )")
       .eq("activo", true),
+    // Mensajes sin leer (0029). El cliente reportó que no se enteraba "en
+    // ningún lado" de que tenía mensajes: el único aviso vivía dentro de
+    // /tareas, o sea que había que entrar para enterarse de que había algo por
+    // lo que entrar. El Panel es la pantalla de inicio — el aviso va acá.
+    supabase.rpc("resumen_comentarios_tareas"),
   ])
+
+  const sinLeer = ((resumenRows ?? []) as { no_leidos: number }[])
+    .reduce((acc, r) => acc + Number(r.no_leidos), 0)
 
   const semana = (ocs ?? []) as unknown as Ocurrencia[]
   const tareaPorId = new Map(
@@ -72,10 +81,36 @@ export async function ResumenSemanalTareas({ esAdmin }: { esAdmin: boolean }) {
   const hechas = semana.filter((o) => o.estado === "FINALIZADA").length
   const atrasadas = semana.filter((o) => o.estado !== "FINALIZADA" && o.fecha < hoy).length
 
-  // Sin tareas en la semana (empleado sin asignaciones): no ocupar lugar.
-  if (total === 0) return null
+  // Aviso de mensajes sin leer. Se arma aparte del resumen a propósito: tiene
+  // que sobrevivir al early return de abajo. Un empleado sin tareas esta semana
+  // igual puede tener un mensaje esperándolo, y ese es justo el caso en el que
+  // NADIE se lo iba a avisar.
+  const avisoMensajes = sinLeer > 0 && (
+    <Link
+      href={DOMINIO.tareas.ruta}
+      className="flex items-center gap-2 rounded-xl border border-app-red/40 bg-app-red/10 px-4 py-3 hover:bg-app-red/15 transition-colors"
+    >
+      <MessageCircle className="w-4 h-4 text-app-red shrink-0" />
+      <span className="text-sm text-app-text">
+        Tenés{" "}
+        <span className="font-display font-semibold text-app-red">
+          {sinLeer} {sinLeer === 1 ? "mensaje sin leer" : "mensajes sin leer"}
+        </span>{" "}
+        en {sinLeer === 1 ? "una tarea" : "tus tareas"}.
+      </span>
+      <span className="ml-auto font-mono text-[10.5px] text-app-muted uppercase tracking-widest whitespace-nowrap">
+        Ver →
+      </span>
+    </Link>
+  )
+
+  // Sin tareas en la semana (empleado sin asignaciones): no ocupar lugar —
+  // salvo que haya mensajes esperando.
+  if (total === 0) return avisoMensajes || null
 
   return (
+    <>
+      {avisoMensajes}
     <section className="rounded-xl border border-app-line-soft bg-app-card p-5 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-display font-semibold">
@@ -155,5 +190,6 @@ export async function ResumenSemanalTareas({ esAdmin }: { esAdmin: boolean }) {
         </div>
       )}
     </section>
+    </>
   )
 }

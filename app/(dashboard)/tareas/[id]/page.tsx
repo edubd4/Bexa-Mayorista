@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { TareaComentariosDialog } from "@/components/tareas/TareaComentariosDialog"
 import { TareaForm } from "@/components/tareas/TareaForm"
 import { ToggleTareaActivoButton } from "@/components/tareas/ToggleTareaActivoButton"
 import { Badge } from "@/components/ui/badge"
@@ -31,10 +32,16 @@ export default async function TareaDetallePage({ params }: { params: Params }) {
     .maybeSingle()
   if (!tarea) notFound()
 
-  const [{ data: usuarios }, { data: areaRows }] = await Promise.all([
+  const [{ data: usuarios }, { data: areaRows }, { data: resumenRows }] = await Promise.all([
     supabase.from("profiles").select("id, nombre, rol").eq("activo", true).order("nombre"),
     supabase.from("tareas").select("area").not("area", "is", null),
+    // Estado de la conversación de ESTA tarea (0029). La ficha no tenía
+    // comentarios: entrabas a la tarea y la charla no existía.
+    supabase.rpc("resumen_comentarios_tareas"),
   ])
+
+  const resumen = ((resumenRows ?? []) as { tarea_id: string; total: number; no_leidos: number }[])
+    .find((r) => r.tarea_id === tarea.id)
 
   const areasExistentes = Array.from(
     new Set(((areaRows ?? []) as { area: string | null }[]).map((r) => r.area).filter((a): a is string => !!a)),
@@ -65,6 +72,15 @@ export default async function TareaDetallePage({ params }: { params: Params }) {
             <Badge variant={tarea.activo ? "green" : "gray"}>
               {tarea.activo ? "Activa" : "Inactiva"}
             </Badge>
+            {/* La conversación, también acá (0029): si entrás a la tarea desde
+                la tabla, lo primero que querés es leer lo que se dijo. */}
+            <TareaComentariosDialog
+              tareaId={tarea.id}
+              tareaNombre={tarea.nombre}
+              noLeidos={Number(resumen?.no_leidos ?? 0)}
+              total={Number(resumen?.total ?? 0)}
+              usuarioId={user.id}
+            />
             <ToggleTareaActivoButton tareaId={tarea.id} activo={tarea.activo} />
           </div>
         </header>
