@@ -8,9 +8,11 @@ import { PreciosPorListaManager, type PrecioPorListaFila } from "@/components/pr
 import { PreciosTramoLista, type PrecioTramo } from "@/components/productos/PreciosTramoLista"
 import { ProductoForm } from "@/components/productos/ProductoForm"
 import { ToggleProductoActivoButton } from "@/components/productos/ToggleProductoActivoButton"
+import { EliminarButton } from "@/components/ui/eliminar-button"
+import { eliminarProducto } from "@/app/(dashboard)/productos/actions"
 import { ROL } from "@/lib/constants"
 import { DOMINIO } from "@/lib/dominio"
-import { puedeCargarStockVendedor } from "@/lib/permisos"
+import { puedeCargarProductos, puedeCargarStockVendedor } from "@/lib/permisos"
 import { TIPO_MOV_STOCK_LABEL, TIPO_MOV_STOCK_VARIANT, signoDelta } from "@/lib/productos-ui"
 import type { TipoMovStock } from "@/lib/validators/producto"
 import { formatFechaHora, formatPesos } from "@/lib/utils"
@@ -63,6 +65,10 @@ export default async function ProductoDetallePage({ params }: { params: Params }
   if (!profile?.activo) redirect("/login")
 
   const esAdmin = profile.rol === ROL.ADMIN
+  // Desde la 0028 el vendedor también edita, da de baja y elimina (decisión del
+  // cliente 2026-07-29). Lo que sigue siendo exclusivo del admin es lo que la
+  // vista `productos_catalogo` no trae: costo y comisión.
+  const puedeGestionar = puedeCargarProductos(profile.rol)
 
   const table = esAdmin ? "productos" : "productos_catalogo"
   const columns = esAdmin
@@ -92,10 +98,12 @@ export default async function ProductoDetallePage({ params }: { params: Params }
       .eq("producto_id", producto.id)
       .order("created_at", { ascending: false })
       .limit(15),
-    esAdmin
+    // Sugerencias del ComboBox: las necesita cualquiera que edite, no solo el
+    // admin. Salen de productos_catalogo, que no expone costos.
+    puedeGestionar
       ? supabase.from("productos_catalogo").select("categoria").not("categoria", "is", null)
       : Promise.resolve({ data: [] }),
-    esAdmin
+    puedeGestionar
       ? supabase.from("productos_catalogo").select("marca").not("marca", "is", null)
       : Promise.resolve({ data: [] }),
     // Tramos de precio por cantidad (0022). El vendedor también los ve:
@@ -119,7 +127,7 @@ export default async function ProductoDetallePage({ params }: { params: Params }
       .map((r) => r.marca).filter((m): m is string => !!m)),
   ).sort()
 
-  const { data: proveedoresActivos } = esAdmin
+  const { data: proveedoresActivos } = puedeGestionar
     ? await supabase
         .from("proveedores")
         .select("id, id_publico, nombre")
@@ -194,12 +202,20 @@ export default async function ProductoDetallePage({ params }: { params: Params }
             <Badge variant={producto.activo ? "green" : "gray"}>
               {producto.activo ? "Activo" : "Inactivo"}
             </Badge>
-            {esAdmin && (
-              <ToggleProductoActivoButton
-                productoId={producto.id}
-                idPublico={producto.id_publico}
-                activo={producto.activo}
-              />
+            {puedeGestionar && (
+              <>
+                <ToggleProductoActivoButton
+                  productoId={producto.id}
+                  idPublico={producto.id_publico}
+                  activo={producto.activo}
+                />
+                <EliminarButton
+                  action={eliminarProducto.bind(null, producto.id)}
+                  etiqueta={`${producto.id_publico} · ${producto.nombre}`}
+                  entidad="producto"
+                  redirectTo={DOMINIO.productos.ruta}
+                />
+              </>
             )}
           </div>
         </header>
@@ -247,8 +263,11 @@ export default async function ProductoDetallePage({ params }: { params: Params }
           </section>
         )}
 
-        {/* Form de edición (admin) */}
-        {esAdmin && (
+        {/* Form de edición. Admin y vendedor (0028), con dos diferencias:
+            el vendedor no ve `comision_pct` (la define solo el admin, 0017) ni
+            `costo` — no puede leerlo, así que tampoco puede reescribirlo; el
+            RPC lo deja como estaba. Los precios por cantidad sí los edita. */}
+        {puedeGestionar && (
           <ProductoForm
             mode="edit"
             productoId={producto.id}
@@ -260,9 +279,9 @@ export default async function ProductoDetallePage({ params }: { params: Params }
               marca: producto.marca ?? undefined,
               atributos,
               proveedor_id: producto.proveedor_id ?? undefined,
-              costo: (producto as ProductoAdmin).costo ?? 0,
+              costo: esAdmin ? (producto as ProductoAdmin).costo ?? 0 : 0,
               precio_base: producto.precio_base,
-              comision_pct: (producto as ProductoAdmin).comision_pct ?? undefined,
+              comision_pct: esAdmin ? (producto as ProductoAdmin).comision_pct ?? undefined : undefined,
               stock_minimo: producto.stock_minimo,
               precios_tramo: tramos.map((t) => ({
                 cantidad_min: t.cantidad_min,
@@ -272,12 +291,14 @@ export default async function ProductoDetallePage({ params }: { params: Params }
             proveedores={(proveedoresActivos ?? []) as { id: string; id_publico: string; nombre: string }[]}
             categoriasExistentes={categoriasExistentes}
             marcasExistentes={marcasExistentes}
+            mostrarComision={esAdmin}
+            mostrarCosto={esAdmin}
           />
         )}
 
-        {/* Precios por cantidad — vista del VENDEDOR (0022): le sirven para
-            cotizar. El admin los edita adentro del form de arriba. */}
-        {!esAdmin && tramos.length > 0 && (
+        {/* Precios por cantidad — solo lectura para quien NO edita (marketing).
+            Admin y vendedor los tocan adentro del form de arriba. */}
+        {!puedeGestionar && tramos.length > 0 && (
           <section className="rounded-xl border border-app-line-soft bg-app-card p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-display font-semibold">Precios por cantidad</h2>

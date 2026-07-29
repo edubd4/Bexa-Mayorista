@@ -335,7 +335,7 @@ export const SECCIONES: SeccionManual[] = [
         nivel: "info",
         titulo: "La conversación de cada tarea vive en la tarea",
         texto:
-          "El globito de la fila abre los comentarios: dudas, avisos, 'faltó tal cosa' — todo queda escrito ahí, con quién lo dijo, a qué hora y quién lo leyó (✓✓). Si tenés mensajes sin leer, el globito muestra el número y arriba de la pantalla te avisa. No hace falta escribirse por WhatsApp por cosas del trabajo: dejalo en la tarea, que mañana también sirve.",
+          "El globito de la fila abre los comentarios: dudas, avisos, 'faltó tal cosa' — todo queda escrito ahí, con quién lo dijo, a qué hora y quién lo leyó (✓✓). Mirá el color: GRIS y sin número es que no hay ningún mensaje; ROJO con un número son los mensajes sin leer que tenés esperando; VERDE con un número es que hay conversación y ya está leída. Además el Panel te avisa apenas entrás si tenés algo sin leer, y el globito está también en las tareas atrasadas y en la ficha de cada tarea. No hace falta escribirse por WhatsApp por cosas del trabajo: dejalo en la tarea, que mañana también sirve.",
       },
       {
         tipo: "aviso",
@@ -414,7 +414,14 @@ export const SECCIONES: SeccionManual[] = [
         nivel: "info",
         titulo: "Precios por cantidad: el tramo manda",
         texto:
-          "Un producto puede tener precios por tramo: de 1 a 9 unidades un precio, de 10 en adelante otro, el bulto otro — tantos escalones como quieras. Se cargan en el MISMO formulario del producto (al crearlo o editarlo), sección 'Precios por cantidad'. Ojo con la regla: si un tramo aplica a la cantidad vendida, ESE es el precio — no se le suma la lista del cliente ni los descuentos. Un solo beneficio por cantidad, así el precio siempre se puede explicar.",
+          "Un producto puede tener precios por tramo: de 1 a 9 unidades un precio, de 10 en adelante otro, el bulto otro — tantos escalones como quieras. Se cargan en el MISMO formulario del producto (al crearlo o editarlo), sección 'Precios por cantidad'. Los carga el admin Y el vendedor. Ojo con la regla: si un tramo aplica a la cantidad vendida, ESE es el precio — no se le suma la lista del cliente ni los descuentos. Un solo beneficio por cantidad, así el precio siempre se puede explicar.",
+      },
+      {
+        tipo: "aviso",
+        nivel: "info",
+        titulo: "Editar y eliminar productos",
+        texto:
+          "El vendedor puede editar cualquier producto del catálogo y eliminarlo. Dos aclaraciones. Primera: al editar no vas a ver el campo Costo — no es un error, los costos del catálogo los ve solo el admin; guardar tus cambios deja el costo como estaba. Segunda: 'Eliminar' borra el producto de verdad SOLO si nunca se usó (sin ventas, compras ni movimientos de stock). Si ya tiene movimientos, se da de baja y se conserva — borrarlo rompería las ventas viejas que lo mencionan. El sistema te avisa cuál de las dos cosas hizo.",
       },
       {
         tipo: "aviso",
@@ -828,23 +835,31 @@ export const SECCIONES: SeccionManual[] = [
               "El teléfono no es opcional en la práctica: es lo que usás para cobrar y para reactivar. Cargalo siempre.",
           },
           {
-            titulo: "3 · Lista de precios",
+            titulo: "3 · Lista de precios (solo el admin)",
             detalle:
-              "Asignale la lista que corresponda a su tipo de cliente. Este campo es el que define a qué precio le vas a vender de acá en adelante.",
+              "Asignale la lista que corresponda a su tipo de cliente. Este campo es el que define a qué precio le vas a vender de acá en adelante — por eso lo maneja solo el admin. Si sos vendedor no vas a ver este campo: cargá el cliente igual y pedile al admin que le asigne la lista.",
           },
         ],
       },
       {
         tipo: "aviso",
         nivel: "info",
+        titulo: "El alta y la edición de clientes las hace también el vendedor",
+        texto:
+          "Dar de alta, editar y eliminar clientes lo pueden hacer el admin y el vendedor. Todo queda asentado en el historial con tu nombre. Lo único reservado al admin es la lista de precios del cliente.",
+      },
+      {
+        tipo: "aviso",
+        nivel: "info",
         titulo: "Consumidor Final es un cliente del sistema",
         texto:
-          "Ya viene creado para las ventas de mostrador sin cliente identificado. No se puede editar ni desactivar, a propósito: media operación depende de que exista.",
+          "Ya viene creado para las ventas de mostrador sin cliente identificado. No se puede editar, desactivar ni eliminar, a propósito: media operación depende de que exista.",
       },
       {
         tipo: "texto",
         parrafos: [
-          "Los clientes no se borran: se desactivan. Un cliente desactivado deja de aparecer para vender pero conserva todo su historial de compras. Es la única forma de que los números del pasado sigan siendo verdad.",
+          "Un cliente que ya compró NO se borra: se desactiva. Deja de aparecer para vender pero conserva todo su historial de compras. Es la única forma de que los números del pasado sigan siendo verdad.",
+          "Si apretás 'Eliminar' sobre un cliente que nunca compró (lo cargaste con un typo, quedó duplicado), ahí sí se borra de verdad. El sistema decide solo cuál de las dos cosas corresponde y te lo dice.",
         ],
       },
       {
@@ -917,9 +932,14 @@ export const SECCIONES: SeccionManual[] = [
             ruta: "/gastos/nuevo",
           },
           {
-            titulo: "2 · Las categorías las administrás vos",
+            titulo: "2 · Si es publicidad, elegí la campaña",
             detalle:
-              "Se crean y desactivan desde Configuración. Tener categorías bien pensadas es lo que hace útil el reporte de fin de mes.",
+              "El formulario tiene un campo Campaña. Si el gasto es la pauta de una campaña, elegila: el monto entra en el costo de esa campaña y el retorno se calcula solo. Cargalo UNA sola vez — acá o desde la ficha de la campaña, es el mismo registro.",
+          },
+          {
+            titulo: "3 · Las categorías las administrás vos",
+            detalle:
+              "Se crean y desactivan desde Configuración. Tener categorías bien pensadas es lo que hace útil el reporte de fin de mes. La categoría 'Publicidad' es especial: es la única que Marketing puede usar.",
             ruta: "/configuracion/categorias-gasto",
           },
         ],
@@ -1015,10 +1035,25 @@ export const SECCIONES: SeccionManual[] = [
               "Los productos que estás promocionando. Esto es lo que después permite atribuir ventas automáticamente.",
           },
           {
-            titulo: "4 · Presupuesto y gasto real",
+            titulo: "4 · Presupuesto estimado",
             detalle:
-              "El presupuesto es lo que pensabas gastar. El gasto real se enlaza con un gasto cargado en el módulo de gastos — es lo que se usa para calcular el retorno de verdad.",
+              "Lo que pensás gastar. Es una referencia: no mueve plata ni entra en el retorno.",
           },
+          {
+            titulo: "5 · Cargá los costos a medida que pagás",
+            detalle:
+              "En la ficha de la campaña, 'Costos de la campaña' → Cargar costo. Cada carga es un gasto REAL: sale de la caja igual que cualquier otro gasto y suma al costo de la campaña. Podés cargar todos los que quieras (la pauta de Instagram, el influencer, la impresión de folletos) — no es uno solo. Sin costos cargados, el retorno no se puede calcular y queda vacío.",
+          },
+        ],
+      },
+      {
+        tipo: "lista",
+        titulo: "Sobre los costos de la campaña",
+        items: [
+          "Los cargan el Admin y Marketing. El Vendedor los ve pero no los toca.",
+          "Marketing solo puede cargar gastos de categoría de publicidad, y siempre imputados a una campaña.",
+          "El gasto se carga UNA sola vez: desde la ficha de la campaña o desde Gastos eligiendo la campaña. Es el mismo registro — no lo cargues en los dos lados o vas a estar contando la plata dos veces.",
+          "Si te equivocaste, no se edita: se ANULA (solo el Admin) y se carga de nuevo. La plata vuelve a la caja y el costo de la campaña baja solo.",
         ],
       },
       {
@@ -1167,7 +1202,7 @@ export const SECCIONES: SeccionManual[] = [
         items: [
           "Ve y hace todo: ventas, compras, caja, gastos, finanzas y contabilidad.",
           "Es el único que ve los costos y la ganancia real.",
-          "Administra productos, proveedores, clientes, listas de precios y reglas de descuento.",
+          "Administra proveedores, listas de precios y reglas de descuento. Productos y clientes los comparte con el vendedor.",
           "Crea usuarios, les asigna rol y porcentaje de comisión, y resetea contraseñas.",
           "Es el único que puede ajustar stock a mano y cancelar ventas ya cobradas.",
         ],
@@ -1177,9 +1212,11 @@ export const SECCIONES: SeccionManual[] = [
         titulo: "Vendedor — el que está en el mostrador",
         items: [
           "Registra ventas y cobra las suyas.",
-          "Ve el catálogo de productos con precio y stock, pero NUNCA el costo ni la ganancia.",
+          "Da de alta, edita y elimina productos y clientes, con precios por cantidad incluidos.",
+          "Ve el catálogo con precio y stock, pero NUNCA el costo ni la ganancia. Al editar un producto el campo Costo ni aparece: guardar deja el costo como estaba.",
+          "No define la comisión de un producto ni la lista de precios de un cliente — eso es del admin.",
           "Ve sus comisiones, semana a semana.",
-          "Consulta clientes y trabaja la lista de seguimiento.",
+          "Trabaja la lista de seguimiento.",
           "No entra a caja, gastos, finanzas, contabilidad, compras ni configuración.",
         ],
       },
@@ -1188,10 +1225,11 @@ export const SECCIONES: SeccionManual[] = [
         titulo: "Marketing — el que trae la demanda",
         items: [
           "Crea y gestiona campañas, publicaciones y métricas.",
+          "Carga los costos de sus campañas: gastos de categoría publicidad, siempre imputados a una campaña. Eso sale de la caja y es lo que alimenta el retorno.",
           "Ve el calendario de campañas y el retorno de cada una.",
           "Consulta clientes y productos, y trabaja la lista de seguimiento.",
-          "No registra ventas ni compras.",
-          "No toca caja, gastos, finanzas ni comisiones.",
+          "No registra ventas ni compras. No carga ni edita productos ni clientes.",
+          "No anula gastos (eso devuelve plata a la caja: solo el admin) ni entra a finanzas o comisiones.",
         ],
       },
       {

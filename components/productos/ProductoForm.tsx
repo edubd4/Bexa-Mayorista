@@ -28,11 +28,18 @@ type Props = {
   // ni se renderiza y el valor no viaja: el RPC del vendedor no lo acepta como
   // parámetro. Ver 0017.
   mostrarComision?: boolean
-  // Los precios por cantidad también son política de precios del admin. Cuando
-  // es false, el editor no se renderiza y el array no viaja (la action lo
-  // descarta igual si llegara). Pedido del cliente 2026-07-27: se cargan en el
-  // mismo lugar que el producto, tantos tramos como quiera.
+  // Los precios por cantidad se cargan en el mismo lugar que el producto,
+  // tantos tramos como quiera (pedido del cliente 2026-07-27). Desde la 0028
+  // los carga también el vendedor: es el que negocia el volumen.
   mostrarTramos?: boolean
+  // ★ El campo COSTO se oculta en la edición del vendedor, y no es cosmética.
+  // El vendedor no puede LEER el costo (`productos_select_admin`, regla de oro
+  // de CLAUDE.md), así que el form no tiene con qué precargarlo. Si lo
+  // mostráramos vacío, cada vez que el vendedor guardara un cambio de nombre le
+  // borraría al admin el costo del producto y el margen de todo el catálogo se
+  // iría al tacho, en silencio. En el ALTA sí se muestra: ahí el vendedor sabe
+  // cuánto le salió porque lo trae él — escribir un costo no es leerlo (0017).
+  mostrarCosto?: boolean
 }
 
 // Fila del editor de tramos: permite vacíos mientras se tipea; al enviar,
@@ -62,6 +69,7 @@ export function ProductoForm({
   marcasExistentes,
   mostrarComision = true,
   mostrarTramos = true,
+  mostrarCosto = true,
 }: Props) {
   const router = useRouter()
   const toast = useToast()
@@ -225,23 +233,27 @@ export function ProductoForm({
 
       <section className="rounded-xl border border-app-line-soft bg-app-card p-6 space-y-5">
         <h2 className="font-display text-lg font-semibold">
-          {mostrarComision ? "Precio y comisión" : "Costo y precio"}
+          {mostrarComision ? "Precio y comisión" : mostrarCosto ? "Costo y precio" : "Precio"}
         </h2>
-        <div className={`grid grid-cols-1 gap-4 ${mostrarComision ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
-          <div className="space-y-2">
-            <Label htmlFor="costo">Costo</Label>
-            <MoneyInput
-              id="costo"
-              decimals={2}
-              value={form.costo ?? 0}
-              onChange={(v) => update("costo", v ?? 0)}
-            />
-            <p className="text-[11px] text-app-muted font-mono">
-              {mostrarComision
-                ? "Es un dato del catálogo — NO registra plata en caja. Para comprar mercadería con plata usá Compras."
-                : "Cuánto te salió a vos este producto. Lo cargás ahora y después no vuelve a mostrarse: los costos del catálogo los ve solo el admin. Cargarlo acá NO mueve plata de la caja."}
-            </p>
-          </div>
+        <div className={`grid grid-cols-1 gap-4 ${
+          mostrarComision ? "md:grid-cols-3" : mostrarCosto ? "md:grid-cols-2" : "md:grid-cols-1"
+        }`}>
+          {mostrarCosto && (
+            <div className="space-y-2">
+              <Label htmlFor="costo">Costo</Label>
+              <MoneyInput
+                id="costo"
+                decimals={2}
+                value={form.costo ?? 0}
+                onChange={(v) => update("costo", v ?? 0)}
+              />
+              <p className="text-[11px] text-app-muted font-mono">
+                {mostrarComision
+                  ? "Es un dato del catálogo — NO registra plata en caja. Para comprar mercadería con plata usá Compras."
+                  : "Cuánto te salió a vos este producto. Lo cargás ahora y después no vuelve a mostrarse: los costos del catálogo los ve solo el admin. Cargarlo acá NO mueve plata de la caja."}
+              </p>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="precio_base">Precio base (minorista)</Label>
             <MoneyInput
@@ -273,9 +285,16 @@ export function ProductoForm({
           )}
         </div>
 
-        {/* Precios por cantidad (0022): tantos tramos como quiera el admin,
-            acá mismo — no en otra pantalla. El tramo que aplique a la
-            cantidad vendida PISA lista y descuentos. */}
+        {!mostrarCosto && (
+          <p className="text-[11px] text-app-muted font-mono border-t border-app-line-soft pt-3">
+            El costo de este producto no se muestra ni se toca acá — los costos
+            del catálogo los ve solo el admin. Guardar cambios lo deja como está.
+          </p>
+        )}
+
+        {/* Precios por cantidad (0022): tantos tramos como quiera, acá mismo —
+            no en otra pantalla. El tramo que aplique a la cantidad vendida
+            PISA lista y descuentos. */}
         {mostrarTramos && (
           <div className="border-t border-app-line-soft pt-4 space-y-3">
             <div className="flex items-center justify-between">

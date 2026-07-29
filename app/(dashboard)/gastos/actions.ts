@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { requireAdmin } from "@/lib/auth-guards"
+import { requireAdmin, requireRegistroGastos } from "@/lib/auth-guards"
 import { TIPO_EVENTO } from "@/lib/constants"
 import { DOMINIO } from "@/lib/dominio"
 import { logHistorial } from "@/lib/historial"
@@ -18,13 +18,18 @@ import {
 type ActionResult = { ok: false; error: string } | { ok: true }
 
 // ─── Registrar gasto (via RPC atómica que crea mov EGRESO + gasto) ─────────
-export async function registrarGasto(input: GastoInput): Promise<ActionResult> {
+// El guard deja pasar admin y marketing; las dos condiciones extra de marketing
+// (categoría de publicidad + campaña obligatoria) las impone registrar_gasto en
+// SQL, que es donde no se pueden saltear. Ver 0028.
+async function registrarGastoInterno(
+  input: GastoInput,
+): Promise<{ ok: false; error: string } | { ok: true; gastoId: string }> {
   const parsed = gastoSchema.safeParse(input)
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
 
-  const guard = await requireAdmin()
+  const guard = await requireRegistroGastos()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
@@ -35,6 +40,7 @@ export async function registrarGasto(input: GastoInput): Promise<ActionResult> {
     p_fecha:        parsed.data.fecha ?? null,
     p_metodo:       parsed.data.metodo,
     p_notas:        parsed.data.notas ?? null,
+    p_campana_id:   parsed.data.campana_id ?? null,
   })
   if (error || !gastoId) return { ok: false, error: error?.message ?? "No se pudo registrar el gasto" }
 
@@ -50,14 +56,41 @@ export async function registrarGasto(input: GastoInput): Promise<ActionResult> {
       descripcion: `Gasto ${g.id_publico} · ${g.monto} · ${parsed.data.descripcion}`,
       entidadTipo: "gasto",
       entidadId: g.id_publico,
-      payload: { monto: g.monto, categoria_id: parsed.data.categoria_id },
+      payload: {
+        monto: g.monto,
+        categoria_id: parsed.data.categoria_id,
+        campana_id: parsed.data.campana_id ?? null,
+      },
       userId: user.id,
     })
   }
 
   revalidatePath(DOMINIO.gastos.ruta)
   revalidatePath(DOMINIO.caja.ruta)
+  return { ok: true, gastoId: gastoId as string }
+}
+
+export async function registrarGasto(input: GastoInput): Promise<ActionResult> {
+  const res = await registrarGastoInterno(input)
+  if (!res.ok) return res
+
+  if (input.campana_id) revalidatePath(`${DOMINIO.campanas.ruta}/${input.campana_id}`)
   redirect(DOMINIO.gastos.ruta)
+}
+
+// Variante para la ficha de la campaña: mismo RPC, pero NO redirige a /gastos.
+// El que está cargando la pauta de Instagram quiere quedarse en la campaña
+// viendo cómo se le mueve el ROI, no irse a la lista de gastos.
+export async function registrarGastoDeCampana(
+  campanaId: string,
+  input: Omit<GastoInput, "campana_id">,
+): Promise<ActionResult> {
+  const res = await registrarGastoInterno({ ...input, campana_id: campanaId })
+  if (!res.ok) return res
+
+  revalidatePath(`${DOMINIO.campanas.ruta}/${campanaId}`)
+  revalidatePath(DOMINIO.campanas.ruta)
+  return { ok: true }
 }
 
 // ─── Anular gasto (0023) ───────────────────────────────────────────────────
@@ -82,7 +115,7 @@ export async function anularGasto(input: AnularGastoInput): Promise<ActionResult
 
   const { data: g } = await supabase
     .from("gastos")
-    .select("id_publico, monto")
+    .select("id_publico, monto, campana_id")
     .eq("id", parsed.data.gasto_id)
     .maybeSingle()
 
@@ -97,6 +130,12 @@ export async function anularGasto(input: AnularGastoInput): Promise<ActionResult
 
   revalidatePath(DOMINIO.gastos.ruta)
   revalidatePath(DOMINIO.caja.ruta)
+  // Anular un gasto de campaña le baja el costo y le mueve el ROI: la ficha
+  // tiene que reflejarlo sin esperar a que caduque el cache.
+  if (g?.campana_id) {
+    revalidatePath(`${DOMINIO.campanas.ruta}/${g.campana_id}`)
+    revalidatePath(DOMINIO.campanas.ruta)
+  }
   return { ok: true }
 }
 

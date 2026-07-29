@@ -5,9 +5,12 @@ import { createServerClient } from "@/lib/supabase/server"
 import { Badge } from "@/components/ui/badge"
 import { ClienteForm } from "@/components/clientes/ClienteForm"
 import { ToggleClienteActivoButton } from "@/components/clientes/ToggleClienteActivoButton"
+import { EliminarButton } from "@/components/ui/eliminar-button"
+import { eliminarCliente } from "@/app/(dashboard)/clientes/actions"
 import { TIPO_CLIENTE_LABEL, TIPO_CLIENTE_VARIANT } from "@/lib/clientes-ui"
 import { ROL } from "@/lib/constants"
 import { DOMINIO } from "@/lib/dominio"
+import { puedeCargarClientes } from "@/lib/permisos"
 import {
   CONSUMIDOR_FINAL_ID,
   nombreVisible,
@@ -49,6 +52,9 @@ export default async function ClienteDetallePage({ params }: { params: Params })
   if (!profile?.activo) redirect("/login")
 
   const esAdmin = profile.rol === ROL.ADMIN
+  // Desde la 0028 el vendedor edita, da de baja y elimina clientes. Lo único
+  // que queda para el admin es asignar la lista de precios.
+  const puedeGestionar = puedeCargarClientes(profile.rol)
 
   const { data: cliente } = await supabase
     .from("clientes")
@@ -60,11 +66,16 @@ export default async function ClienteDetallePage({ params }: { params: Params })
 
   if (!cliente) notFound()
 
-  const { data: listasPrecios } = await supabase
-    .from("listas_precios")
-    .select("id, id_publico, nombre")
-    .eq("activo", true)
-    .order("nombre")
+  // Solo para el admin: al vendedor no se le renderiza el selector de lista
+  // (con el array vacío la sección ni aparece) y el trigger
+  // clientes_lista_precio_admin_only lo bloquea igual en la base.
+  const { data: listasPrecios } = esAdmin
+    ? await supabase
+        .from("listas_precios")
+        .select("id, id_publico, nombre")
+        .eq("activo", true)
+        .order("nombre")
+    : { data: [] }
 
   const esConsumidorFinal = cliente.id === CONSUMIDOR_FINAL_ID
   const ent = DOMINIO.clientes
@@ -104,12 +115,20 @@ export default async function ClienteDetallePage({ params }: { params: Params })
             <Badge variant={cliente.activo ? "green" : "gray"}>
               {cliente.activo ? "Activo" : "Inactivo"}
             </Badge>
-            {esAdmin && !esConsumidorFinal && (
-              <ToggleClienteActivoButton
-                clienteId={cliente.id}
-                idPublico={cliente.id_publico}
-                activo={cliente.activo}
-              />
+            {puedeGestionar && !esConsumidorFinal && (
+              <>
+                <ToggleClienteActivoButton
+                  clienteId={cliente.id}
+                  idPublico={cliente.id_publico}
+                  activo={cliente.activo}
+                />
+                <EliminarButton
+                  action={eliminarCliente.bind(null, cliente.id)}
+                  etiqueta={`${cliente.id_publico} · ${nombreVisible(cliente)}`}
+                  entidad="cliente"
+                  redirectTo={DOMINIO.clientes.ruta}
+                />
+              </>
             )}
           </div>
         </header>
@@ -160,7 +179,7 @@ export default async function ClienteDetallePage({ params }: { params: Params })
           </section>
         )}
 
-        {esAdmin && !esConsumidorFinal ? (
+        {puedeGestionar && !esConsumidorFinal ? (
           <ClienteForm
             mode="edit"
             clienteId={cliente.id}

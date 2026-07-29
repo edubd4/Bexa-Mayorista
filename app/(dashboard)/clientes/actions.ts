@@ -2,7 +2,12 @@
 
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { requireAdmin } from "@/lib/auth-guards"
+// El CRUD de clientes lo hace el admin Y el vendedor desde la 0028 (decisión
+// del cliente 2026-07-29). A diferencia de productos no hace falta RPC: la
+// policy de SELECT ya era authenticated y la única columna sensible
+// (`lista_precio_id`, que define lo que el cliente paga en cada venta) la
+// protege el trigger clientes_lista_precio_admin_only.
+import { requireCargaClientes } from "@/lib/auth-guards"
 import { TIPO_EVENTO } from "@/lib/constants"
 import { DOMINIO } from "@/lib/dominio"
 import { logHistorial } from "@/lib/historial"
@@ -21,7 +26,7 @@ export async function createCliente(input: ClienteInput): Promise<ActionResult> 
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
 
-  const guard = await requireAdmin()
+  const guard = await requireCargaClientes()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
@@ -59,7 +64,7 @@ export async function updateCliente(id: string, input: ClienteInput): Promise<Ac
     return { ok: false, error: "El Consumidor Final es un cliente del sistema — no se edita." }
   }
 
-  const guard = await requireAdmin()
+  const guard = await requireCargaClientes()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
@@ -93,7 +98,7 @@ export async function toggleClienteActivo(id: string): Promise<ActionResult> {
     return { ok: false, error: "El Consumidor Final no se puede desactivar." }
   }
 
-  const guard = await requireAdmin()
+  const guard = await requireCargaClientes()
   if (!guard.ok) return { ok: false, error: guard.error }
   const { supabase, user } = guard
 
@@ -124,4 +129,54 @@ export async function toggleClienteActivo(id: string): Promise<ActionResult> {
   revalidatePath(DOMINIO.clientes.ruta)
   revalidatePath(`${DOMINIO.clientes.ruta}/${id}`)
   return { ok: true }
+}
+
+// ─── Eliminar cliente (0028) ───────────────────────────────────────────────
+// Mismo criterio que productos: borra de verdad solo si el cliente nunca
+// compró; si tiene ventas, lo desactiva. `ventas.cliente_id` es `on delete
+// restrict` — un DELETE de alguien que compró lo rechaza la base, y el
+// historial guarda el texto del evento, no la fila: la venta vieja no se
+// podría reconstruir. El RPC devuelve qué hizo para que la UI lo diga.
+type EliminarResult =
+  | { ok: false; error: string }
+  | { ok: true; resultado: "BORRADO" | "DESACTIVADO" }
+
+export async function eliminarCliente(id: string): Promise<EliminarResult> {
+  if (id === CONSUMIDOR_FINAL_ID) {
+    return { ok: false, error: "El Consumidor Final es un cliente del sistema — no se elimina." }
+  }
+
+  const guard = await requireCargaClientes()
+  if (!guard.ok) return { ok: false, error: guard.error }
+  const { supabase, user } = guard
+
+  // Se lee ANTES del RPC: si borra la fila, después no hay de dónde sacar el
+  // id_publico y el historial quedaría con un UUID mudo.
+  const { data: current } = await supabase
+    .from("clientes")
+    .select("id_publico, tipo, nombre, apellido, razon_social")
+    .eq("id", id)
+    .maybeSingle()
+  if (!current) return { ok: false, error: "Cliente no encontrado" }
+
+  const { data, error } = await supabase.rpc("eliminar_cliente", { p_cliente_id: id })
+  if (error) return { ok: false, error: error.message }
+
+  const resultado = (data as string) === "BORRADO" ? "BORRADO" : "DESACTIVADO"
+
+  await logHistorial(supabase, {
+    tipo: TIPO_EVENTO.BAJA,
+    descripcion:
+      resultado === "BORRADO"
+        ? `Cliente ${current.id_publico} · ${nombreVisible(current)} eliminado definitivamente (nunca compró)`
+        : `Cliente ${current.id_publico} · ${nombreVisible(current)} dado de baja (tiene ventas — se conserva)`,
+    entidadTipo: "cliente",
+    entidadId: current.id_publico,
+    payload: { resultado },
+    userId: user.id,
+  })
+
+  revalidatePath(DOMINIO.clientes.ruta)
+  revalidatePath(`${DOMINIO.clientes.ruta}/${id}`)
+  return { ok: true, resultado }
 }

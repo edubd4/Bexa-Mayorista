@@ -81,8 +81,9 @@ export async function createProducto(input: ProductoInput): Promise<ActionResult
 
   let creado: { id: string; id_publico: string; nombre: string }
   // precios_tramo no es columna de `productos`: se separa y se reconcilia
-  // aparte. Solo el admin define política de precios — al vendedor ni le
-  // aparece el editor y si el payload lo trajera igual, acá se descarta.
+  // aparte. Desde la 0028 los carga también el vendedor, así que la
+  // reconciliación quedó FUERA del if — antes vivía solo en la rama del admin
+  // y los tramos que cargaba un vendedor se perdían sin decir nada.
   const { precios_tramo, ...productoData } = parsed.data
 
   if (esAdmin(rol)) {
@@ -96,13 +97,6 @@ export async function createProducto(input: ProductoInput): Promise<ActionResult
       return { ok: false, error: error?.message ?? "No se pudo crear el producto" }
     }
     creado = data
-
-    if (precios_tramo && precios_tramo.length > 0) {
-      const res = await reconciliarTramos(supabase, user.id, creado.id, precios_tramo)
-      if (!res.ok) {
-        return { ok: false, error: `Producto creado, pero los precios por cantidad fallaron: ${res.error}` }
-      }
-    }
   } else {
     // `comision_pct` no viaja: no es parámetro del RPC. Si el form de un
     // vendedor lo mandara igual, se ignora acá y la función lo escribe null.
@@ -130,6 +124,13 @@ export async function createProducto(input: ProductoInput): Promise<ActionResult
       id: fila.producto_id,
       id_publico: fila.producto_id_publico,
       nombre: parsed.data.nombre,
+    }
+  }
+
+  if (precios_tramo && precios_tramo.length > 0) {
+    const res = await reconciliarTramos(supabase, user.id, creado.id, precios_tramo)
+    if (!res.ok) {
+      return { ok: false, error: `Producto creado, pero los precios por cantidad fallaron: ${res.error}` }
     }
   }
 
@@ -200,31 +201,65 @@ export async function quickCreateProducto(input: {
   return { ok: true, producto: { ...data, costo: Number(data.costo) } }
 }
 
+// Edición. La hacen el admin Y el vendedor (decisión del cliente 2026-07-29),
+// por los dos mismos caminos que el alta:
+//
+//   admin    → UPDATE directo. Toca comisión y costo como siempre.
+//   vendedor → RPC actualizar_producto_vendedor (SECURITY DEFINER, lista
+//              blanca). No manda comisión NI costo: el costo no puede leerlo,
+//              así que tampoco puede reescribirlo — el RPC lo deja como estaba.
 export async function updateProducto(id: string, input: ProductoInput): Promise<ActionResult> {
   const parsed = productoSchema.safeParse(input)
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
 
-  const guard = await requireAdmin()
+  const guard = await requireCargaProductos()
   if (!guard.ok) return { ok: false, error: guard.error }
-  const { supabase, user } = guard
+  const { supabase, user, rol } = guard
 
   const { precios_tramo, ...productoData } = parsed.data
+  let idPublico: string
 
-  const { data, error } = await supabase
-    .from("productos")
-    .update({ ...productoData, updated_by: user.id })
-    .eq("id", id)
-    .select("id_publico")
-    .single()
+  if (esAdmin(rol)) {
+    const { data, error } = await supabase
+      .from("productos")
+      .update({ ...productoData, updated_by: user.id })
+      .eq("id", id)
+      .select("id_publico")
+      .single()
 
-  if (error || !data) {
-    return { ok: false, error: error?.message ?? "No se pudo actualizar el producto" }
+    if (error || !data) {
+      return { ok: false, error: error?.message ?? "No se pudo actualizar el producto" }
+    }
+    idPublico = data.id_publico
+  } else {
+    // `p_costo` NO viaja: el form del vendedor no muestra el campo (no puede
+    // leer el valor actual) y el RPC interpreta null como "dejá el que estaba".
+    // Si mandáramos el 0 que trae el schema por default, cada edición del
+    // vendedor le borraría al admin el costo del producto en silencio.
+    const { data, error } = await supabase.rpc("actualizar_producto_vendedor", {
+      p_producto_id:  id,
+      p_nombre:       parsed.data.nombre,
+      p_sku:          parsed.data.sku ?? null,
+      p_descripcion:  parsed.data.descripcion ?? null,
+      p_categoria:    parsed.data.categoria ?? null,
+      p_marca:        parsed.data.marca ?? null,
+      p_atributos:    parsed.data.atributos ?? {},
+      p_proveedor_id: parsed.data.proveedor_id ?? null,
+      p_precio_base:  parsed.data.precio_base ?? 0,
+      p_stock_minimo: parsed.data.stock_minimo ?? 0,
+    })
+
+    if (error || !data) {
+      return { ok: false, error: error?.message ?? "No se pudo actualizar el producto" }
+    }
+    idPublico = data as string
   }
 
-  // El form del admin siempre manda el array (vacío = sin tramos): la
-  // reconciliación borra los que sacó. `undefined` = form viejo/vendedor, no tocar.
+  // El form siempre manda el array (vacío = sin tramos): la reconciliación
+  // borra los que sacó. `undefined` = el editor no se renderizó, no tocar.
+  // Desde la 0028 la policy de escritura de tramos incluye al vendedor.
   if (precios_tramo !== undefined) {
     const res = await reconciliarTramos(supabase, user.id, id, precios_tramo)
     if (!res.ok) {
@@ -234,9 +269,9 @@ export async function updateProducto(id: string, input: ProductoInput): Promise<
 
   await logHistorial(supabase, {
     tipo: TIPO_EVENTO.MODIFICACION,
-    descripcion: `Producto ${data.id_publico} editado`,
+    descripcion: `Producto ${idPublico} editado`,
     entidadTipo: "producto",
-    entidadId: data.id_publico,
+    entidadId: idPublico,
     userId: user.id,
   })
 
@@ -245,24 +280,28 @@ export async function updateProducto(id: string, input: ProductoInput): Promise<
   return { ok: true }
 }
 
+// Baja lógica / reactivación. Va por RPC también para el admin: unifica el
+// camino y evita que el vendedor choque contra productos_select_admin, que le
+// tapa la fila antes de poder actualizarla.
 export async function toggleProductoActivo(id: string): Promise<ActionResult> {
-  const guard = await requireAdmin()
+  const guard = await requireCargaProductos()
   if (!guard.ok) return { ok: false, error: guard.error }
-  const { supabase, user } = guard
+  const { supabase, user, rol } = guard
 
-  const { data: current, error: readErr } = await supabase
-    .from("productos")
+  // El vendedor lee por la vista sin costos; el admin, por la tabla.
+  const { data: current } = await supabase
+    .from(esAdmin(rol) ? "productos" : "productos_catalogo")
     .select("activo, id_publico")
     .eq("id", id)
-    .single()
-  if (readErr || !current) return { ok: false, error: "Producto no encontrado" }
+    .maybeSingle()
+  if (!current) return { ok: false, error: "Producto no encontrado" }
 
   const nuevo = !current.activo
 
-  const { error } = await supabase
-    .from("productos")
-    .update({ activo: nuevo, updated_by: user.id })
-    .eq("id", id)
+  const { error } = await supabase.rpc("set_producto_activo", {
+    p_producto_id: id,
+    p_activo: nuevo,
+  })
   if (error) return { ok: false, error: error.message }
 
   await logHistorial(supabase, {
@@ -277,6 +316,50 @@ export async function toggleProductoActivo(id: string): Promise<ActionResult> {
   revalidatePath(DOMINIO.productos.ruta)
   revalidatePath(`${DOMINIO.productos.ruta}/${id}`)
   return { ok: true }
+}
+
+// Eliminar (0028). El RPC decide y devuelve QUÉ hizo: borra de verdad solo si
+// el producto nunca se usó; si tiene ventas, compras, movimientos de stock,
+// listas o campañas, lo desactiva. La UI muestra cuál de las dos cosas pasó —
+// decir "listo" a secas cuando en realidad se desactivó es mentirle al usuario.
+type EliminarResult =
+  | { ok: false; error: string }
+  | { ok: true; resultado: "BORRADO" | "DESACTIVADO" }
+
+export async function eliminarProducto(id: string): Promise<EliminarResult> {
+  const guard = await requireCargaProductos()
+  if (!guard.ok) return { ok: false, error: guard.error }
+  const { supabase, user, rol } = guard
+
+  // El id_publico se lee ANTES: si el RPC borra la fila, después no hay de
+  // dónde sacarlo y el historial quedaría con un UUID que no le dice nada a nadie.
+  const { data: current } = await supabase
+    .from(esAdmin(rol) ? "productos" : "productos_catalogo")
+    .select("id_publico, nombre")
+    .eq("id", id)
+    .maybeSingle()
+  if (!current) return { ok: false, error: "Producto no encontrado" }
+
+  const { data, error } = await supabase.rpc("eliminar_producto", { p_producto_id: id })
+  if (error) return { ok: false, error: error.message }
+
+  const resultado = (data as string) === "BORRADO" ? "BORRADO" : "DESACTIVADO"
+
+  await logHistorial(supabase, {
+    tipo: TIPO_EVENTO.BAJA,
+    descripcion:
+      resultado === "BORRADO"
+        ? `Producto ${current.id_publico} · ${current.nombre} eliminado definitivamente (nunca se usó)`
+        : `Producto ${current.id_publico} · ${current.nombre} dado de baja (tiene movimientos — se conserva)`,
+    entidadTipo: "producto",
+    entidadId: current.id_publico,
+    payload: { resultado, nombre: current.nombre },
+    userId: user.id,
+  })
+
+  revalidatePath(DOMINIO.productos.ruta)
+  revalidatePath(`${DOMINIO.productos.ruta}/${id}`)
+  return { ok: true, resultado }
 }
 
 // ─── Movimientos de stock ──────────────────────────────────────────────────

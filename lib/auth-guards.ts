@@ -77,11 +77,32 @@ export async function requireGestionCampanas(): Promise<AdminGuardResult> {
 }
 
 // Catálogo de productos: lo carga el admin y el vendedor. Marketing no —
-// no cargan mercadería (matriz de la 0015).
+// no cargan mercadería (matriz de la 0015). Desde la 0028 cubre el CRUD
+// completo (alta, edición y baja), no solo el alta.
 export async function requireCargaProductos(): Promise<AdminGuardResult> {
   return requireRol(
     [ROL.ADMIN, ROL.COLABORADOR],
-    "No tenés permiso para dar de alta productos",
+    "No tenés permiso para gestionar productos",
+  )
+}
+
+// Clientes: mismo criterio que productos desde la 0028 (decisión del cliente
+// 2026-07-29). Espeja a public.puede_cargar_catalogo() en SQL.
+export async function requireCargaClientes(): Promise<AdminGuardResult> {
+  return requireRol(
+    [ROL.ADMIN, ROL.COLABORADOR],
+    "No tenés permiso para gestionar clientes",
+  )
+}
+
+// Gastos (0028): admin siempre; marketing solo para gastos de publicidad
+// imputados a una campaña. Este guard deja pasar a los dos roles — las DOS
+// condiciones de marketing las verifica registrar_gasto en SQL, que es donde
+// no se pueden saltear llamando a supabase-js directo.
+export async function requireRegistroGastos(): Promise<AdminGuardResult> {
+  return requireRol(
+    [ROL.ADMIN, ROL.MARKETING],
+    "No tenés permiso para registrar gastos",
   )
 }
 
