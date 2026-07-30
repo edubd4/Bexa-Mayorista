@@ -77,7 +77,16 @@ export default async function NuevoProductoPage() {
         <ProductoForm
           mode="create"
           mostrarComision={mostrarComision}
-          mostrarTramos={mostrarComision}
+          // Los precios por cantidad los carga TAMBIÉN el vendedor: es el que
+          // negocia el volumen con el mayorista (decisión del cliente
+          // 2026-07-29, habilitado en la 0028). Acá estaba atado a
+          // `mostrarComision`, o sea admin-only: la 0028 abrió la policy, el
+          // RPC y la edición, pero esta línea siguió tapando el editor en el
+          // ALTA. El vendedor cargaba el producto y recién podía ponerle los
+          // tramos entrando de nuevo a editarlo.
+          // No hace falta condición: la página ya redirige arriba a quien no
+          // puede cargar productos.
+          mostrarTramos
           proveedores={(proveedores ?? []) as { id: string; id_publico: string; nombre: string }[]}
           categoriasExistentes={categoriasExistentes}
           marcasExistentes={marcasExistentes}

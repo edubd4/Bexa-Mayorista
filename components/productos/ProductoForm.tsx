@@ -304,34 +304,57 @@ export function ProductoForm({
               </p>
             </div>
 
+            {/* La regla explicada con números, no en abstracto. "El escalón
+                más alto que la cantidad alcance" no se entiende hasta que ves
+                que pedir 4 paga el precio de 3. */}
+            <p className="text-[11px] text-app-muted font-mono leading-relaxed">
+              Cargá desde qué cantidad rige cada precio. Se aplica el escalón
+              más alto que la cantidad alcance, y el precio es{" "}
+              <span className="text-app-secondary">por unidad</span>.
+              <br />
+              Ejemplo: <span className="text-app-secondary">1 → $10.000 · 3 → $9.000 · 5 → $8.000</span>{" "}
+              significa que llevando 2 paga $10.000 c/u, llevando 4 paga $9.000 c/u
+              y llevando 6 paga $8.000 c/u.
+            </p>
+
             {tramos.length === 0 ? (
               <p className="text-[11px] text-app-muted font-mono">
-                Sin tramos: rige la lista del cliente o el precio base. Agregá
-                escalones si el precio cambia con la cantidad (ej: 1-9 un
-                precio, 10+ otro, el bulto otro).
+                Sin escalones cargados: rige la lista del cliente o el precio base
+                de arriba.
               </p>
             ) : (
               <div className="space-y-2">
+                {/* Encabezados: sin esto, dos campos numéricos uno al lado del
+                    otro no dicen cuál es cantidad y cuál es plata. */}
+                <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                  <span className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">
+                    Desde (unidades)
+                  </span>
+                  <span className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">
+                    Precio por unidad
+                  </span>
+                  <span className="w-8" aria-hidden="true" />
+                </div>
                 {tramos.map((t, idx) => (
                   <div key={idx} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
                     <NumberInput
                       decimals={0}
                       value={t.cantidad_min}
                       onChange={(v) => updateTramo(idx, "cantidad_min", v)}
-                      placeholder="Desde (unidades)"
-                      aria-label={`Cantidad mínima del tramo ${idx + 1}`}
+                      placeholder="Ej: 3"
+                      aria-label={`Desde cuántas unidades rige el escalón ${idx + 1}`}
                     />
                     <MoneyInput
                       decimals={2}
                       value={t.precio}
                       onChange={(v) => updateTramo(idx, "precio", v)}
-                      aria-label={`Precio unitario del tramo ${idx + 1}`}
+                      aria-label={`Precio por unidad del escalón ${idx + 1}`}
                     />
                     <button
                       type="button"
                       onClick={() => setTramos((prev) => prev.filter((_, i) => i !== idx))}
                       className="text-app-muted hover:text-app-red transition-colors p-2"
-                      aria-label={`Quitar tramo ${idx + 1}`}
+                      aria-label={`Quitar el escalón ${idx + 1}`}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -346,7 +369,7 @@ export function ProductoForm({
               size="sm"
               onClick={() => setTramos((prev) => [...prev, { cantidad_min: null, precio: null }])}
             >
-              + Agregar tramo
+              + Agregar escalón de cantidad
             </Button>
           </div>
         )}
