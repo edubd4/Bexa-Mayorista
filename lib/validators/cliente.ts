@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { zUuid } from "./shared"
+import { CONDICION_IVA } from "./facturacion"
 
 const emptyToUndef = (v: unknown) => (v === "" ? undefined : v)
 
@@ -22,6 +23,13 @@ export const clienteSchema = z.object({
   apellido:        z.preprocess(emptyToUndef, z.string().trim().max(200).optional()),
   razon_social:    z.preprocess(emptyToUndef, z.string().trim().max(200).optional()),
   documento:       z.preprocess(emptyToUndef, z.string().trim().max(20).optional()),
+  // Condición frente al IVA (0031) — define si recibe Factura A o B.
+  condicion_iva:   z.enum([
+    CONDICION_IVA.RESPONSABLE_INSCRIPTO,
+    CONDICION_IVA.MONOTRIBUTISTA,
+    CONDICION_IVA.CONSUMIDOR_FINAL,
+    CONDICION_IVA.EXENTO,
+  ]).default(CONDICION_IVA.CONSUMIDOR_FINAL),
   telefono:        z.preprocess(emptyToUndef, z.string().trim().max(40).optional()),
   whatsapp:        z.preprocess(emptyToUndef, z.string().trim().max(40).optional()),
   instagram:       z.preprocess(instagramSanitize, z.string().trim().max(60).optional()),

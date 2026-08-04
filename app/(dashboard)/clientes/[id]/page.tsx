@@ -16,6 +16,7 @@ import {
   nombreVisible,
   type TipoCliente,
 } from "@/lib/validators/cliente"
+import type { CondicionIva } from "@/lib/validators/facturacion"
 
 type Params = { id: string }
 
@@ -27,6 +28,7 @@ type ClienteRow = {
   apellido: string | null
   razon_social: string | null
   documento: string | null
+  condicion_iva: CondicionIva
   telefono: string | null
   whatsapp: string | null
   instagram: string | null
@@ -59,7 +61,7 @@ export default async function ClienteDetallePage({ params }: { params: Params })
   const { data: cliente } = await supabase
     .from("clientes")
     .select(
-      "id, id_publico, tipo, nombre, apellido, razon_social, documento, telefono, whatsapp, instagram, email, direccion, ciudad, provincia, lista_precio_id, notas, activo",
+      "id, id_publico, tipo, nombre, apellido, razon_social, documento, condicion_iva, telefono, whatsapp, instagram, email, direccion, ciudad, provincia, lista_precio_id, notas, activo",
     )
     .eq("id", params.id)
     .maybeSingle<ClienteRow>()
@@ -190,6 +192,7 @@ export default async function ClienteDetallePage({ params }: { params: Params })
               apellido: cliente.apellido ?? undefined,
               razon_social: cliente.razon_social ?? undefined,
               documento: cliente.documento ?? undefined,
+              condicion_iva: cliente.condicion_iva,
               telefono: cliente.telefono ?? undefined,
               whatsapp: cliente.whatsapp ?? undefined,
               instagram: cliente.instagram ?? undefined,

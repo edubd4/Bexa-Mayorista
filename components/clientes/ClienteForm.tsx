@@ -13,6 +13,8 @@ import { useToast } from "@/components/ui/toast"
 import { createCliente, updateCliente } from "@/app/(dashboard)/clientes/actions"
 import { DOMINIO } from "@/lib/dominio"
 import { TIPO_CLIENTE, type ClienteInput } from "@/lib/validators/cliente"
+import { CONDICION_IVA } from "@/lib/validators/facturacion"
+import { CONDICION_IVA_LABEL } from "@/lib/facturacion-ui"
 
 type ListaPrecio = { id: string; id_publico: string; nombre: string }
 
@@ -29,6 +31,7 @@ const DEFAULTS: ClienteInput = {
   apellido: undefined,
   razon_social: undefined,
   documento: undefined,
+  condicion_iva: CONDICION_IVA.CONSUMIDOR_FINAL,
   telefono: undefined,
   whatsapp: undefined,
   instagram: undefined,
@@ -135,6 +138,22 @@ export function ClienteForm({ mode, clienteId, initial, listasPrecios = [] }: Pr
               onChange={(e) => update("documento", e.target.value)}
               placeholder={esMayorista ? "30-XXXXXXXX-X" : "DNI o CUIT"}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="condicion_iva">Condición frente al IVA</Label>
+            <Select
+              id="condicion_iva"
+              value={form.condicion_iva}
+              onChange={(e) => update("condicion_iva", e.target.value as ClienteInput["condicion_iva"])}
+            >
+              {Object.entries(CONDICION_IVA_LABEL).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </Select>
+            <p className="text-[10.5px] text-app-muted">
+              Define el comprobante: Responsable Inscripto y Monotributista reciben Factura A (con CUIT obligatorio); el resto, Factura B.
+            </p>
           </div>
 
           {esMayorista && (
