@@ -15,9 +15,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { EmitirFacturaButton } from "@/components/ventas/EmitirFacturaButton"
 import { ROL } from "@/lib/constants"
 import { DOMINIO } from "@/lib/dominio"
-import { formatFechaHora, formatPesos } from "@/lib/utils"
+import { formatFecha, formatFechaHora, formatPesos } from "@/lib/utils"
 import {
   ESTADO_COBRO_LABEL,
   ESTADO_COBRO_VARIANT,
@@ -25,7 +26,19 @@ import {
   ESTADO_ENTREGA_VARIANT,
   explicarOrigenPrecio,
 } from "@/lib/ventas-ui"
+import {
+  CONDICION_IVA_LABEL,
+  TIPO_COMPROBANTE_LABEL,
+  formatNumeroComprobante,
+  qrUrlComprobante,
+} from "@/lib/facturacion-ui"
 import { nombreVisible, type TipoCliente } from "@/lib/validators/cliente"
+import {
+  normalizarCuit,
+  tipoComprobantePara,
+  type Comprobante,
+  type CondicionIva,
+} from "@/lib/validators/facturacion"
 import type { EstadoCobro, EstadoEntrega } from "@/lib/validators/venta"
 
 type Params = { id: string }
@@ -51,6 +64,8 @@ type VentaFull = {
     apellido: string | null
     razon_social: string | null
     tipo: TipoCliente
+    documento: string | null
+    condicion_iva: CondicionIva
   } | null
   vendedor: { nombre: string } | null
 }
@@ -90,7 +105,7 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
       estado_entrega, estado_cobro,
       subtotal, descuento_total, total, total_cobrado,
       notas, cancelada_at, cancelada_motivo,
-      cliente:cliente_id ( id, id_publico, nombre, apellido, razon_social, tipo ),
+      cliente:cliente_id ( id, id_publico, nombre, apellido, razon_social, tipo, documento, condicion_iva ),
       vendedor:vendedor_id ( nombre )
     `)
     .eq("id", params.id)
@@ -98,7 +113,7 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
 
   if (!venta) notFound()
 
-  const [{ data: items }, { data: comision }] = await Promise.all([
+  const [{ data: items }, { data: comision }, { data: comprobanteRow }, { data: cfgCuit }] = await Promise.all([
     supabase
       .from("venta_items")
       .select("id, cantidad, precio_unitario, descuento_pct, precio_final_unit, origen_precio, comision_pct_snapshot, comision_monto, producto:producto_id ( id, id_publico, nombre )")
@@ -109,6 +124,17 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
       .from("comisiones")
       .select("monto_base, porcentaje, monto")
       .eq("venta_id", venta.id)
+      .maybeSingle(),
+    supabase
+      .from("comprobantes")
+      .select("id, tipo, punto_venta, numero, fecha_emision, cuit_emisor, doc_tipo, doc_nro, condicion_iva_receptor, neto, iva, total, cae, cae_vencimiento")
+      .eq("venta_id", venta.id)
+      .maybeSingle<Comprobante>(),
+    // afip_cuit vacío = facturación electrónica todavía no configurada.
+    supabase
+      .from("configuracion")
+      .select("valor")
+      .eq("clave", "afip_cuit")
       .maybeSingle(),
   ])
 
@@ -126,6 +152,17 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
     venta.estado_cobro !== "CANCELADA" &&
     venta.estado_cobro !== "COBRADA" &&
     saldo > 0 &&
+    (esAdmin || venta.vendedor_id === user.id)
+  // Facturación electrónica: solo con el CUIT de la empresa configurado (0031),
+  // venta viva, sin comprobante previo, y misma autorización que cobrar.
+  const afipConfigurada = Boolean(normalizarCuit(cfgCuit?.valor))
+  const tipoFactura = venta.cliente ? tipoComprobantePara(venta.cliente.condicion_iva) : null
+  const puedeFacturar =
+    afipConfigurada &&
+    !comprobanteRow &&
+    tipoFactura !== null &&
+    venta.estado_cobro !== "CANCELADA" &&
+    Number(venta.total) > 0 &&
     (esAdmin || venta.vendedor_id === user.id)
 
   return (
@@ -174,6 +211,15 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
             </div>
             {puedeCobrar && (
               <CobrarVentaForm ventaId={venta.id} idPublico={venta.id_publico} saldo={saldo} />
+            )}
+            {puedeFacturar && venta.cliente && tipoFactura && (
+              <EmitirFacturaButton
+                ventaId={venta.id}
+                idPublico={venta.id_publico}
+                tipoLabel={TIPO_COMPROBANTE_LABEL[tipoFactura]}
+                receptor={`${nombreVisible(venta.cliente)} (${CONDICION_IVA_LABEL[venta.cliente.condicion_iva]})`}
+                totalFmt={formatPesos(Number(venta.total))}
+              />
             )}
             {puedeCancelar && (
               <CancelarVentaButton ventaId={venta.id} idPublico={venta.id_publico} />
@@ -273,6 +319,65 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
             </div>
           </div>
         </section>
+
+        {/* Comprobante fiscal (si la venta fue facturada en ARCA) */}
+        {comprobanteRow && (
+          <section className="rounded-xl border border-app-line-soft bg-app-card p-6 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-display font-semibold">
+                  {TIPO_COMPROBANTE_LABEL[comprobanteRow.tipo]}{" "}
+                  <span className="font-mono text-app-accent">
+                    {formatNumeroComprobante(comprobanteRow.punto_venta, Number(comprobanteRow.numero))}
+                  </span>
+                </h2>
+                <p className="text-xs text-app-secondary font-mono mt-0.5">
+                  Emitida {formatFecha(comprobanteRow.fecha_emision)} ·{" "}
+                  {CONDICION_IVA_LABEL[comprobanteRow.condicion_iva_receptor]}
+                </p>
+              </div>
+              <div className="shrink-0 flex flex-col items-end gap-1.5">
+                <a
+                  href={`/factura/${venta.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-mono text-app-accent hover:underline"
+                >
+                  Ver / imprimir factura ↗
+                </a>
+                <a
+                  href={qrUrlComprobante(comprobanteRow)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-mono text-app-muted hover:text-app-accent hover:underline"
+                >
+                  Verificar en ARCA ↗
+                </a>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-right border-t border-app-line-soft pt-4">
+              <div>
+                <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">Neto</p>
+                <p className="font-display text-lg mt-1">{formatPesos(Number(comprobanteRow.neto))}</p>
+              </div>
+              <div>
+                <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">IVA</p>
+                <p className="font-display text-lg mt-1">{formatPesos(Number(comprobanteRow.iva))}</p>
+              </div>
+              <div>
+                <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">Total</p>
+                <p className="font-display text-lg mt-1">{formatPesos(Number(comprobanteRow.total))}</p>
+              </div>
+              <div>
+                <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">CAE</p>
+                <p className="font-mono text-sm mt-1.5">{comprobanteRow.cae}</p>
+                <p className="text-[10.5px] font-mono text-app-muted mt-0.5">
+                  vence {formatFecha(comprobanteRow.cae_vencimiento)}
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Comisión (si el usuario tiene visibilidad) */}
         {comision && (
