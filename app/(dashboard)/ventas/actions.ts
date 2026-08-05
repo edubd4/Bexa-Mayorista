@@ -1,7 +1,6 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { redirect } from "next/navigation"
 import { createServerClient } from "@/lib/supabase/server"
 import { TIPO_EVENTO } from "@/lib/constants"
 import { DOMINIO } from "@/lib/dominio"
@@ -66,7 +65,11 @@ export async function resolverPrecio(
 }
 
 // ─── Registrar venta (el corazón — vía RPC transaccional) ──────────────────
-export async function registrarVenta(input: VentaInput): Promise<ActionResult> {
+// Devuelve el venta_id en lugar de redirigir: el form encadena la emisión de
+// la factura ("emitir al registrar") antes de navegar a la ficha. Si la
+// factura falla, la venta YA está registrada — stock/caja/comisión no dependen
+// jamás de que ARCA responda.
+export async function registrarVenta(input: VentaInput): Promise<ActionResult<{ venta_id: string }>> {
   const parsed = ventaSchema.safeParse(input)
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
@@ -111,7 +114,7 @@ export async function registrarVenta(input: VentaInput): Promise<ActionResult> {
   }
 
   revalidatePath(DOMINIO.ventas.ruta)
-  redirect(`${DOMINIO.ventas.ruta}/${ventaId as string}`)
+  return { ok: true, data: { venta_id: ventaId as string } }
 }
 
 // ─── Cambiar estado de entrega (0021) ──────────────────────────────────────

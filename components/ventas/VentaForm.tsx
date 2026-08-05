@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import Link from "next/link"
-import { Plus, Trash2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { FileCheck2, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { NumberInput } from "@/components/ui/number-input"
@@ -18,10 +19,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { registrarVenta, resolverPrecio } from "@/app/(dashboard)/ventas/actions"
+import { emitirFactura, registrarVenta, resolverPrecio } from "@/app/(dashboard)/ventas/actions"
 import { DOMINIO } from "@/lib/dominio"
+import { CONDICION_IVA_LABEL, TIPO_COMPROBANTE_LABEL } from "@/lib/facturacion-ui"
 import { formatPesos } from "@/lib/utils"
 import { explicarOrigenPrecio } from "@/lib/ventas-ui"
+import {
+  normalizarCuit,
+  tipoComprobantePara,
+  type CondicionIva,
+} from "@/lib/validators/facturacion"
 import {
   ESTADO_ENTREGA,
   type PrecioResuelto,
@@ -39,6 +46,8 @@ type ClienteOption = {
   razon_social: string | null
   tipo: string
   lista_precio_id: string | null
+  condicion_iva: CondicionIva
+  documento: string | null
 }
 type ProductoOption = {
   id: string
@@ -69,6 +78,9 @@ type Props = {
   clientes:  ClienteOption[]
   productos: ProductoOption[]
   campanasActivas?: CampanaOption[]
+  /** true cuando afip_cuit está cargado en Configuración (0031) —
+   *  habilita el hint de comprobante y el "emitir al registrar" */
+  afipConfigurada?: boolean
 }
 
 function nombreCliente(c: ClienteOption): string {
@@ -79,15 +91,28 @@ function nombreCliente(c: ClienteOption): string {
 let seq = 0
 const nextKey = () => `linea-${++seq}-${Date.now()}`
 
-export function VentaForm({ clientes, productos, campanasActivas = [] }: Props) {
+export function VentaForm({ clientes, productos, campanasActivas = [], afipConfigurada = false }: Props) {
   const toast = useToast()
+  const router = useRouter()
   const [clienteId, setClienteId] = useState<string>(clientes[0]?.id ?? "")
   const [estadoEntrega, setEstadoEntrega] = useState<EstadoEntregaEditable>(ESTADO_ENTREGA.ENTREGADA)
   const [notas, setNotas] = useState("")
   const [campanaId, setCampanaId] = useState<string>("")
   const [lineas, setLineas] = useState<LineaBorrador[]>([])
+  const [facturarAlRegistrar, setFacturarAlRegistrar] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  // ── Qué comprobante saldría para el cliente elegido (mejora premium #2) ──
+  const clienteSel = useMemo(
+    () => clientes.find((c) => c.id === clienteId) ?? null,
+    [clientes, clienteId],
+  )
+  const tipoFactura = clienteSel ? tipoComprobantePara(clienteSel.condicion_iva) : null
+  // Factura A sin CUIT válido = rechazo seguro → se avisa ANTES de registrar.
+  const faltaCuitParaA =
+    tipoFactura === "FACTURA_A" && !normalizarCuit(clienteSel?.documento)
+  const puedeFacturarAca = afipConfigurada && tipoFactura !== null && !faltaCuitParaA
 
   const productosOrdenados = useMemo(
     () => [...productos].filter((p) => p.activo).sort((a, b) => a.nombre.localeCompare(b.nombre)),
@@ -205,11 +230,27 @@ export function VentaForm({ clientes, productos, campanasActivas = [] }: Props) 
 
     startTransition(async () => {
       const res = await registrarVenta(payload)
-      // registrar_venta hace redirect en el server. Solo llegamos acá si hubo error.
-      if (res && !res.ok) {
+      if (!res.ok) {
         setError(res.error)
         toast.error(res.error)
+        return
       }
+      const ventaId = res.data!.venta_id
+
+      // Mejora premium #1: factura en el mismo acto. Si ARCA falla, la venta
+      // YA quedó (stock/caja/comisión) — se avisa y se emite después desde la ficha.
+      if (puedeFacturarAca && facturarAlRegistrar && tipoFactura) {
+        const fact = await emitirFactura({ venta_id: ventaId })
+        if (fact.ok) {
+          toast.success(`Venta registrada · ${TIPO_COMPROBANTE_LABEL[tipoFactura]} emitida con CAE`)
+        } else {
+          toast.error(`Venta registrada, pero la factura no salió: ${fact.error} — podés emitirla desde la ficha.`)
+        }
+      } else {
+        toast.success("Venta registrada")
+      }
+
+      router.push(`${DOMINIO.ventas.ruta}/${ventaId}`)
     })
   }
 
@@ -235,6 +276,19 @@ export function VentaForm({ clientes, productos, campanasActivas = [] }: Props) 
                 </option>
               ))}
             </Select>
+            {/* El vendedor sabe QUÉ va a salir antes de registrar (regla A/B) */}
+            {afipConfigurada && clienteSel && tipoFactura && (
+              faltaCuitParaA ? (
+                <p className="text-[11px] font-mono text-app-amber">
+                  ⚠ {CONDICION_IVA_LABEL[clienteSel.condicion_iva]} → {TIPO_COMPROBANTE_LABEL[tipoFactura]},
+                  pero le falta un CUIT válido en su ficha — sin eso no se puede facturar
+                </p>
+              ) : (
+                <p className="text-[11px] font-mono text-app-muted">
+                  → {TIPO_COMPROBANTE_LABEL[tipoFactura]} · {CONDICION_IVA_LABEL[clienteSel.condicion_iva]}
+                </p>
+              )
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="estado_entrega">Estado de entrega</Label>
@@ -400,7 +454,24 @@ export function VentaForm({ clientes, productos, campanasActivas = [] }: Props) 
         </div>
       )}
 
-      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+      <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3">
+        {afipConfigurada && (
+          <label
+            className={`flex items-center gap-2 text-sm sm:mr-auto ${
+              puedeFacturarAca ? "text-app-text cursor-pointer" : "text-app-muted cursor-not-allowed"
+            }`}
+          >
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-app-accent"
+              checked={puedeFacturarAca && facturarAlRegistrar}
+              disabled={!puedeFacturarAca || isPending}
+              onChange={(e) => setFacturarAlRegistrar(e.target.checked)}
+            />
+            <FileCheck2 className="w-4 h-4" />
+            Emitir {tipoFactura ? TIPO_COMPROBANTE_LABEL[tipoFactura] : "factura"} al registrar
+          </label>
+        )}
         <Button variant="ghost" asChild disabled={isPending}>
           <Link href={DOMINIO.ventas.ruta}>Cancelar</Link>
         </Button>
