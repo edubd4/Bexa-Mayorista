@@ -336,14 +336,24 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
                   {CONDICION_IVA_LABEL[comprobanteRow.condicion_iva_receptor]}
                 </p>
               </div>
-              <a
-                href={qrUrlComprobante(comprobanteRow)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="shrink-0 text-xs font-mono text-app-accent hover:underline"
-              >
-                Verificar en ARCA ↗
-              </a>
+              <div className="shrink-0 flex flex-col items-end gap-1.5">
+                <a
+                  href={`/factura/${venta.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-mono text-app-accent hover:underline"
+                >
+                  Ver / imprimir factura ↗
+                </a>
+                <a
+                  href={qrUrlComprobante(comprobanteRow)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-mono text-app-muted hover:text-app-accent hover:underline"
+                >
+                  Verificar en ARCA ↗
+                </a>
+              </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-right border-t border-app-line-soft pt-4">
               <div>

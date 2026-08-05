@@ -122,5 +122,8 @@ insert into public.configuracion (clave, valor, descripcion) values
   ('afip_razon_social', '',   'Razón social de la empresa tal como figura en ARCA'),
   ('afip_domicilio',    '',   'Domicilio comercial que figura en el comprobante'),
   ('afip_punto_venta',  '1',  'Punto de venta modo Web Services dado de alta en ARCA'),
-  ('afip_iva_pct',      '21', 'Alícuota de IVA del rubro (%) — los precios del sistema son finales (IVA incluido)')
+  ('afip_iva_pct',      '21', 'Alícuota de IVA del rubro (%) — los precios del sistema son finales (IVA incluido)'),
+  -- Datos legales del pie de la factura impresa (RG 1415)
+  ('afip_iibb',                 '', 'Nº de Ingresos Brutos (pie de la factura impresa)'),
+  ('afip_inicio_actividades',   '', 'Fecha de inicio de actividades dd/mm/aaaa (pie de la factura impresa)')
 on conflict (clave) do nothing;
