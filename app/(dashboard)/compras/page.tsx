@@ -20,6 +20,7 @@ import { DOMINIO, nuevoLabel } from "@/lib/dominio"
 import { formatFecha, formatPesos } from "@/lib/utils"
 import { ESTADO_COMPRA_LABEL, ESTADO_COMPRA_VARIANT } from "@/lib/compras-ui"
 import type { EstadoCompra } from "@/lib/validators/compra"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type CompraRow = {
   id: string
@@ -40,11 +41,12 @@ export default async function ComprasPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("ComprasPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
   const q = (searchParams.q ?? "").trim()

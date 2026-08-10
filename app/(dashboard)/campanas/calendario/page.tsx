@@ -1,19 +1,19 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
-import { createServerClient } from "@/lib/supabase/server"
+import { requireAuthenticated } from "@/lib/auth-guards"
 import { CampanasCalendario } from "@/components/campanas/CampanasCalendario"
 import { DOMINIO } from "@/lib/dominio"
 import type { EstadoCampanaEfectivo } from "@/lib/validators/campana"
 
 export default async function CalendarioPage() {
-  const supabase = await createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/login")
-
-  const { data: profile } = await supabase
-    .from("profiles").select("rol, activo").eq("id", user.id).single()
-  if (!profile?.activo) redirect("/login")
+  // El gate es EXACTAMENTE `requireAuthenticated`: el calendario lo lee
+  // cualquier rol activo (no mira el rol ni calcula ninguna capacidad de
+  // `lib/permisos.ts`) y los dos motivos de rechazo van al mismo destino. El
+  // guard loguea el error de lectura del perfil en vez de descartarlo.
+  const guard = await requireAuthenticated()
+  if (!guard.ok) redirect("/login")
+  const { supabase } = guard
 
   const { data: campanas } = await supabase
     .from("v_campanas")

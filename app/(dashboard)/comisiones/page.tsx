@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/table"
 import { ROL } from "@/lib/constants"
 import { formatFecha, formatPesos } from "@/lib/utils"
+import { logPerfilError } from "@/lib/auth-guards"
 
 // Liquidación semanal — decisión cliente 2026-07-13.
 // El vendedor ve SOLO su liquidación; el admin ve la de todos. Se filtra en dos
@@ -15,7 +16,8 @@ export default async function ComisionesPage() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
-  const { data: profile } = await supabase.from("profiles").select("rol, activo, nombre").eq("id", user.id).single()
+  const { data: profile, error: perfilError } = await supabase.from("profiles").select("rol, activo, nombre").eq("id", user.id).single()
+  logPerfilError("ComisionesPage", perfilError)
   if (!profile?.activo) redirect("/login")
   if (profile.rol === ROL.MARKETING) redirect("/panel")
   const esAdmin = profile.rol === ROL.ADMIN

@@ -4,17 +4,19 @@ import { ArrowLeft } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { ListaHeaderForm } from "@/components/listas-precios/ListaHeaderForm"
 import { ROL } from "@/lib/constants"
+import { logPerfilError } from "@/lib/auth-guards"
 
 export default async function NuevaListaPage() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("NuevaListaPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
   const { data: proveedores } = await supabase

@@ -5,17 +5,19 @@ import { createServerClient } from "@/lib/supabase/server"
 import { GastoForm } from "@/components/gastos/GastoForm"
 import { ROL } from "@/lib/constants"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
+import { logPerfilError } from "@/lib/auth-guards"
 
 export default async function NuevoGastoPage() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("NuevoGastoPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
   const [{ data: categorias }, { data: campanas }] = await Promise.all([

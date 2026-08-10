@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { BookOpen, Clock, GraduationCap } from "lucide-react"
-import { createServerClient } from "@/lib/supabase/server"
+import { requireAuthenticated } from "@/lib/auth-guards"
 import { type Rol } from "@/lib/constants"
 import { APP, ROL_LABEL } from "@/lib/dominio"
 import {
@@ -14,20 +14,14 @@ import {
 // El manual vive adentro del sistema: el empleado lo consulta sin salir de la
 // pantalla donde está trabajando. Cada rol ve solo lo que puede ejecutar.
 export default async function ManualPage() {
-  const supabase = await createServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect("/login")
+  // El gate es EXACTAMENTE `requireAuthenticated`: entra cualquier rol activo
+  // (el rol solo elige QUÉ secciones se listan, no si se entra) y los dos
+  // motivos de rechazo van al mismo destino. El guard loguea el error de
+  // lectura del perfil en vez de descartarlo — no queda ningún inline mudo.
+  const guard = await requireAuthenticated()
+  if (!guard.ok) redirect("/login")
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("rol, activo, nombre")
-    .eq("id", user.id)
-    .single()
-  if (!profile?.activo) redirect("/login")
-
-  const rol = profile.rol as Rol
+  const rol = guard.rol as Rol
   const secciones = seccionesPorRol(rol)
   const minutosTotales = secciones.reduce((s, x) => s + x.minutos, 0)
 

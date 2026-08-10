@@ -5,6 +5,7 @@ import { createServerClient } from "@/lib/supabase/server"
 import { ReglasManager } from "@/components/listas-precios/ReglasManager"
 import { ROL } from "@/lib/constants"
 import type { ScopeDescuento } from "@/lib/validators/lista-precio"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type Regla = {
   id: string
@@ -23,11 +24,12 @@ export default async function ReglasGeneralesPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("ReglasGeneralesPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
   const [productosRes, reglasRes] = await Promise.all([

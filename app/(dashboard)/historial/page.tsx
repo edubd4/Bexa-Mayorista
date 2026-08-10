@@ -13,6 +13,7 @@ import {
   ENTIDAD_TIPO_LABEL,
   linkEntidad,
 } from "@/lib/historial-ui"
+import { logPerfilError } from "@/lib/auth-guards"
 
 // Los filtros salen de los mapas de historial-ui: al cosechar un módulo que
 // agrega tipos/entidades, registrarlos allá y estos filtros los levantan solos.
@@ -50,11 +51,12 @@ export default async function HistorialPage({
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user!.id)
     .single()
+  logPerfilError("HistorialPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) {
     redirect("/panel")
   }

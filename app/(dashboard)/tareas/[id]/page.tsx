@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { ROL } from "@/lib/constants"
 import { DOMINIO } from "@/lib/dominio"
 import type { TareaInput } from "@/lib/validators/tarea"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type Params = { id: string }
 
@@ -17,11 +18,12 @@ export default async function TareaDetallePage({ params }: { params: Params }) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("TareaDetallePage", perfilError)
   // La edición del catálogo es admin-only; el empleado opera desde /tareas.
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/tareas")
 

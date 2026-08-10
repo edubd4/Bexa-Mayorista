@@ -1,6 +1,24 @@
-import type { SupabaseClient, User } from "@supabase/supabase-js"
+import type { PostgrestError, SupabaseClient, User } from "@supabase/supabase-js"
 import { createServerClient } from "@/lib/supabase/server"
 import { ROL, type Rol } from "@/lib/constants"
+
+// ★ Un fallo al LEER el perfil es indistinguible de "no tenés permiso" si se
+// descarta el error: los dos terminan en un redirect al panel. Ese silencio
+// costó una sesión entera de diagnóstico (perfil correcto en la base, app
+// mostrando "sin rol"). La causa real vive en el mensaje de PostgREST: sin
+// loguearlo no hay forma de distinguir RLS de credenciales de esquema.
+// En Bexa el daño tiene una segunda cara: las pantallas no siempre rebotan —
+// calculan una capacidad de `lib/permisos.ts` (`esAdmin`, `puedeGestionar...`)
+// y, si la lectura falla, se dibujan sin controles, idénticas a las de un rol
+// menor. Nadie fue redirigido a ningún lado: sin este log no hay síntoma.
+export function logPerfilError(donde: string, error: PostgrestError | null) {
+  if (!error) return
+  console.error(
+    `[auth] No se pudo leer el perfil en ${donde}: ${error.message}` +
+      (error.code ? ` (code ${error.code})` : "") +
+      (error.hint ? ` — hint: ${error.hint}` : ""),
+  )
+}
 
 // Discriminated union con literal boolean `ok`. Garantiza narrowing de TS:
 // tras `if (!guard.ok) return ...`, el compilador sabe que guard es AdminGuardOk
@@ -30,11 +48,12 @@ export async function requireAuthenticated(): Promise<AdminGuardResult> {
 
   if (!user) return { ok: false, error: "No autenticado" }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("requireAuthenticated", perfilError)
 
   if (!profile?.activo) return { ok: false, error: "Usuario inactivo" }
   return { ok: true, supabase, user, rol: profile.rol as Rol }
@@ -54,11 +73,15 @@ async function requireRol(
 
   if (!user) return { ok: false, error: "No autenticado" }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  // `requireRol` es la base de los guards por capacidad (requireGestionCampanas,
+  // requireCargaProductos, …). El nombre del guard concreto no llega hasta acá,
+  // así que el log dice `requireRol` + los roles que se esperaban.
+  logPerfilError(`requireRol(${permitidos.join(", ")})`, perfilError)
 
   if (!profile?.activo) return { ok: false, error: "Usuario inactivo" }
   if (!permitidos.includes(profile.rol as Rol)) return { ok: false, error: errorMsg }
@@ -117,11 +140,12 @@ export async function requireAdmin(): Promise<AdminGuardResult> {
     return { ok: false, error: "No autenticado" }
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("requireAdmin", perfilError)
 
   if (!profile?.activo || profile.rol !== ROL.ADMIN) {
     return { ok: false, error: "Solo un admin puede realizar esta acción" }

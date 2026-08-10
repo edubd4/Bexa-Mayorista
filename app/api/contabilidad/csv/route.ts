@@ -5,6 +5,7 @@ import { diaSiguienteISO, toCSV, tsArgentina } from "@/lib/fechas"
 import { formatPesos } from "@/lib/utils"
 import { METODO_PAGO_LABEL, ORIGEN_MOV_CAJA_LABEL, TIPO_MOV_CAJA_LABEL } from "@/lib/caja-ui"
 import type { MetodoPago, OrigenMovCaja, TipoMovCaja } from "@/lib/validators/caja"
+import { logPerfilError } from "@/lib/auth-guards"
 
 // GET /api/contabilidad/csv?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
 // Exporta el libro del período con BOM UTF-8 para que Excel lo abra bien.
@@ -13,7 +14,8 @@ export async function GET(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 })
 
-  const { data: profile } = await supabase.from("profiles").select("rol, activo").eq("id", user.id).single()
+  const { data: profile, error: perfilError } = await supabase.from("profiles").select("rol, activo").eq("id", user.id).single()
+  logPerfilError("ContabilidadCsvRoute", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) {
     return NextResponse.json({ ok: false, error: "Solo admin" }, { status: 403 })
   }

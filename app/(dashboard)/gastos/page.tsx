@@ -21,6 +21,7 @@ import { DOMINIO, nuevoLabel } from "@/lib/dominio"
 import { formatFecha, formatPesos } from "@/lib/utils"
 import { METODO_PAGO_LABEL } from "@/lib/caja-ui"
 import type { MetodoPago } from "@/lib/validators/caja"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type GastoRow = {
   id: string
@@ -38,11 +39,12 @@ export default async function GastosPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("GastosPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
   const { data } = await supabase

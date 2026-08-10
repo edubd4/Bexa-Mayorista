@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table"
 import { ROL } from "@/lib/constants"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
+import { logPerfilError } from "@/lib/auth-guards"
 
 // Módulo Proveedores — lista. Admin-only en escritura; lectura para authenticated
 // (los productos hacen JOIN a proveedor para mostrar quién lo suministra).
@@ -29,11 +30,12 @@ export default async function ProveedoresPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("ProveedoresPage", perfilError)
   if (!profile?.activo) redirect("/login")
   if (profile.rol === ROL.MARKETING) redirect("/panel")
 

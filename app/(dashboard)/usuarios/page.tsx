@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableEmpty } from "@/components/ui/table"
 import { LinkRow } from "@/components/ui/link-row"
 import { ROL } from "@/lib/constants"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type Profile = {
   id: string
@@ -23,11 +24,12 @@ export default async function UsuariosPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  const { data: myProfile } = await supabase
+  const { data: myProfile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user!.id)
     .single()
+  logPerfilError("UsuariosPage", perfilError)
 
   // Guard fuerte: usuarios es admin-only.
   if (myProfile?.rol !== ROL.ADMIN || !myProfile.activo) {

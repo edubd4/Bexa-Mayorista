@@ -5,17 +5,19 @@ import { createServerClient } from "@/lib/supabase/server"
 import { CompraForm } from "@/components/compras/CompraForm"
 import { ROL } from "@/lib/constants"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
+import { logPerfilError } from "@/lib/auth-guards"
 
 export default async function NuevaCompraPage() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("NuevaCompraPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect(DOMINIO.compras.ruta)
 
   const [{ data: proveedores }, { data: productos }] = await Promise.all([

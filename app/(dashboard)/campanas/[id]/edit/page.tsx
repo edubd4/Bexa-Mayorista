@@ -6,6 +6,7 @@ import { CampanaForm } from "@/components/campanas/CampanaForm"
 import { DOMINIO } from "@/lib/dominio"
 import { puedeGestionarCampanas } from "@/lib/permisos"
 import type { CampanaInput, EstadoCampanaManual } from "@/lib/validators/campana"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type Params = { params: { id: string } }
 
@@ -14,8 +15,9 @@ export default async function EditarCampanaPage({ params }: Params) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles").select("rol, activo").eq("id", user.id).single()
+  logPerfilError("EditarCampanaPage", perfilError)
   if (!profile?.activo) redirect("/login")
   // Editar campañas es de marketing (y del admin). Ver 0017.
   if (!puedeGestionarCampanas(profile.rol)) redirect(`${DOMINIO.campanas.ruta}/${params.id}`)

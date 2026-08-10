@@ -13,12 +13,14 @@ import { formatFecha, formatPesos } from "@/lib/utils"
 import { ESTADO_COBRO_LABEL, ESTADO_COBRO_VARIANT } from "@/lib/ventas-ui"
 import { nombreVisible, type TipoCliente } from "@/lib/validators/cliente"
 import type { EstadoCobro } from "@/lib/validators/venta"
+import { logPerfilError } from "@/lib/auth-guards"
 
 export default async function FinanzasPage() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
-  const { data: profile } = await supabase.from("profiles").select("rol, activo").eq("id", user.id).single()
+  const { data: profile, error: perfilError } = await supabase.from("profiles").select("rol, activo").eq("id", user.id).single()
+  logPerfilError("FinanzasPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
   const [saldoRes, porCobrarRes, gananciaRes] = await Promise.all([

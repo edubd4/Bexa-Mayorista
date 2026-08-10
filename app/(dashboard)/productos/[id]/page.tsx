@@ -16,6 +16,7 @@ import { puedeCargarProductos, puedeCargarStockVendedor } from "@/lib/permisos"
 import { TIPO_MOV_STOCK_LABEL, TIPO_MOV_STOCK_VARIANT, signoDelta } from "@/lib/productos-ui"
 import type { TipoMovStock } from "@/lib/validators/producto"
 import { formatFechaHora, formatPesos } from "@/lib/utils"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type Params = { id: string }
 
@@ -57,11 +58,12 @@ export default async function ProductoDetallePage({ params }: { params: Params }
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("ProductoDetallePage", perfilError)
   if (!profile?.activo) redirect("/login")
 
   const esAdmin = profile.rol === ROL.ADMIN

@@ -23,6 +23,7 @@ import type {
   EstadoPublicacion,
   MetricasManuales,
 } from "@/lib/validators/campana"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type Params = { params: { id: string } }
 
@@ -48,8 +49,9 @@ export default async function CampanaDetalle({ params }: Params) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles").select("rol, activo").eq("id", user.id).single()
+  logPerfilError("CampanaDetalle", perfilError)
   if (!profile?.activo) redirect("/login")
 
   // El vendedor lee la ficha completa (necesita saber qué se promociona y con

@@ -5,14 +5,16 @@ import { createServerClient } from "@/lib/supabase/server"
 import { CampanaForm } from "@/components/campanas/CampanaForm"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
 import { puedeGestionarCampanas } from "@/lib/permisos"
+import { logPerfilError } from "@/lib/auth-guards"
 
 export default async function NuevaCampanaPage() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles").select("rol, activo").eq("id", user.id).single()
+  logPerfilError("NuevaCampanaPage", perfilError)
   if (!profile?.activo) redirect("/login")
   // Las campañas las crea marketing (y el admin). Ver 0017.
   if (!puedeGestionarCampanas(profile.rol)) redirect(DOMINIO.campanas.ruta)

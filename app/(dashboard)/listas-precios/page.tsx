@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { ROL } from "@/lib/constants"
+import { logPerfilError } from "@/lib/auth-guards"
 
 // Listas de precios — admin-only (matriz PLAN-TECNICO §6).
 export default async function ListasPreciosPage() {
@@ -23,11 +24,12 @@ export default async function ListasPreciosPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("ListasPreciosPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
   const { data: listas } = await supabase

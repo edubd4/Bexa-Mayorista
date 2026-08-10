@@ -7,6 +7,7 @@ import { UsuarioEditForm } from "@/components/usuarios/UsuarioEditForm"
 import { DeleteUsuarioButton } from "@/components/usuarios/DeleteUsuarioButton"
 import { ROL } from "@/lib/constants"
 import { formatFechaHora } from "@/lib/utils"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type Profile = {
   id: string
@@ -27,11 +28,12 @@ export default async function UsuarioDetallePage({
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  const { data: myProfile } = await supabase
+  const { data: myProfile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user!.id)
     .single()
+  logPerfilError("UsuarioDetallePage", perfilError)
 
   if (myProfile?.rol !== ROL.ADMIN || !myProfile.activo) {
     redirect("/panel")

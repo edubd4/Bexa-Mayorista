@@ -6,17 +6,19 @@ import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { ConfiguracionForm } from "@/components/configuracion/ConfiguracionForm"
 import { CONFIG_FIELDS } from "@/lib/validators/configuracion"
 import { ROL } from "@/lib/constants"
+import { logPerfilError } from "@/lib/auth-guards"
 
 export default async function ConfiguracionPage() {
   const supabase = await createServerClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user!.id)
     .single()
+  logPerfilError("ConfiguracionPage", perfilError)
 
   if (profile?.rol !== ROL.ADMIN || !profile.activo) {
     redirect("/panel")
