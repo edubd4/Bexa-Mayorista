@@ -19,6 +19,7 @@ import { DOMINIO, nuevoLabel } from "@/lib/dominio"
 import { puedeCargarClientes } from "@/lib/permisos"
 import { TIPO_CLIENTE_LABEL, TIPO_CLIENTE_VARIANT } from "@/lib/clientes-ui"
 import { nombreVisible, type TipoCliente } from "@/lib/validators/cliente"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type ClienteRow = {
   id: string
@@ -42,11 +43,12 @@ export default async function ClientesPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("ClientesPage", perfilError)
   if (!profile?.activo) redirect("/login")
 
   // El alta de clientes es del admin y del vendedor desde la 0028.

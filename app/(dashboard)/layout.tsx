@@ -7,6 +7,7 @@ import { ConfirmProvider } from "@/components/ui/confirm-dialog"
 import { NAV, filterNavByRol } from "@/lib/nav"
 import { type Rol } from "@/lib/constants"
 import { ROL_LABEL } from "@/lib/dominio"
+import { logPerfilError } from "@/lib/auth-guards"
 
 // El módulo opcional ia-chat agrega acá su <ChatDrawer /> al cosecharse.
 export default async function DashboardLayout({
@@ -23,11 +24,12 @@ export default async function DashboardLayout({
     redirect("/login")
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("nombre, rol")
     .eq("id", user.id)
     .single()
+  logPerfilError("DashboardLayout", perfilError)
 
   const userDisplay = profile?.nombre ?? user.email ?? "usuario"
   const userRol = profile?.rol ? ROL_LABEL[profile.rol] ?? profile.rol : "sin rol"

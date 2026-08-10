@@ -19,6 +19,7 @@ import { ROL } from "@/lib/constants"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
 import { puedeCargarProductos } from "@/lib/permisos"
 import { formatPesos } from "@/lib/utils"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type ProductoRow = {
   id: string
@@ -44,11 +45,12 @@ export default async function ProductosPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("ProductosPage", perfilError)
   if (!profile?.activo) redirect("/login")
 
   const esAdmin = profile.rol === ROL.ADMIN

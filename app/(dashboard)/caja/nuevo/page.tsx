@@ -5,17 +5,19 @@ import { createServerClient } from "@/lib/supabase/server"
 import { MovimientoManualForm } from "@/components/caja/MovimientoManualForm"
 import { ROL } from "@/lib/constants"
 import { DOMINIO } from "@/lib/dominio"
+import { logPerfilError } from "@/lib/auth-guards"
 
 export default async function NuevoMovimientoManualPage() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("NuevoMovimientoManualPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
   const ent = DOMINIO.caja

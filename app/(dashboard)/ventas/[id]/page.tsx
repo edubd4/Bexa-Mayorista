@@ -40,6 +40,7 @@ import {
   type CondicionIva,
 } from "@/lib/validators/facturacion"
 import type { EstadoCobro, EstadoEntrega } from "@/lib/validators/venta"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type Params = { id: string }
 
@@ -89,11 +90,12 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("VentaDetallePage", perfilError)
   if (!profile?.activo) redirect("/login")
 
   const esAdmin = profile.rol === ROL.ADMIN

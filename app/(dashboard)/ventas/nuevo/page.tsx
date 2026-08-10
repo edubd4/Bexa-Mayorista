@@ -4,17 +4,19 @@ import { ArrowLeft } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { VentaForm } from "@/components/ventas/VentaForm"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
+import { logPerfilError } from "@/lib/auth-guards"
 
 export default async function NuevaVentaPage() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("NuevaVentaPage", perfilError)
   if (!profile?.activo) redirect("/login")
   // Marketing no puede registrar ventas — el RPC lo bloquea igual, pero rebotamos acá para no mostrar UI muerta.
   if (profile.rol === "marketing") redirect("/panel")

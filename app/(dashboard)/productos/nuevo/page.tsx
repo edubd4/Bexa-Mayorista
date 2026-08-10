@@ -5,17 +5,19 @@ import { createServerClient } from "@/lib/supabase/server"
 import { ProductoForm } from "@/components/productos/ProductoForm"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
 import { puedeCargarProductos, puedeVerCostos } from "@/lib/permisos"
+import { logPerfilError } from "@/lib/auth-guards"
 
 export default async function NuevoProductoPage() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("NuevoProductoPage", perfilError)
   // Admin y vendedor cargan productos; marketing no (0017).
   if (!profile?.activo || !puedeCargarProductos(profile.rol)) {
     redirect(DOMINIO.productos.ruta)

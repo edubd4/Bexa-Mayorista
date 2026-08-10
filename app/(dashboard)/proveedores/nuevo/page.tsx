@@ -5,17 +5,19 @@ import { createServerClient } from "@/lib/supabase/server"
 import { ProveedorForm } from "@/components/proveedores/ProveedorForm"
 import { ROL } from "@/lib/constants"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
+import { logPerfilError } from "@/lib/auth-guards"
 
 export default async function NuevoProveedorPage() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("NuevoProveedorPage", perfilError)
 
   // Solo admin puede dar de alta proveedores (matriz de permisos PLAN-TECNICO §6).
   if (profile?.rol !== ROL.ADMIN || !profile.activo) {

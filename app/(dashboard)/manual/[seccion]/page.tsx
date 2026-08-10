@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { ArrowLeft, ArrowRight, Clock, Info, AlertTriangle, OctagonAlert } from "lucide-react"
-import { createServerClient } from "@/lib/supabase/server"
+import { requireAuthenticated } from "@/lib/auth-guards"
 import { type Rol } from "@/lib/constants"
 import {
   buscarSeccion,
@@ -22,20 +22,14 @@ export default async function SeccionManualPage({
 }: {
   params: { seccion: string }
 }) {
-  const supabase = await createServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect("/login")
+  // El gate de ENTRADA es EXACTAMENTE `requireAuthenticated`: entra cualquier
+  // rol activo y los dos motivos de rechazo van al mismo destino. El filtro por
+  // rol de la sección es autorización posterior, no el gate. El guard loguea el
+  // error de lectura del perfil en vez de descartarlo.
+  const guard = await requireAuthenticated()
+  if (!guard.ok) redirect("/login")
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("rol, activo")
-    .eq("id", user.id)
-    .single()
-  if (!profile?.activo) redirect("/login")
-
-  const rol = profile.rol as Rol
+  const rol = guard.rol as Rol
   const seccion = buscarSeccion(params.seccion)
   if (!seccion) notFound()
 

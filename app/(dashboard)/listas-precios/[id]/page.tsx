@@ -9,6 +9,7 @@ import { ReglasManager } from "@/components/listas-precios/ReglasManager"
 import { ToggleListaActivoButton } from "@/components/listas-precios/ToggleListaActivoButton"
 import { ROL } from "@/lib/constants"
 import type { ScopeDescuento } from "@/lib/validators/lista-precio"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type Params = { id: string }
 
@@ -35,11 +36,12 @@ export default async function ListaPreciosDetallePage({ params }: { params: Para
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("ListaPreciosDetallePage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
   const { data: lista } = await supabase

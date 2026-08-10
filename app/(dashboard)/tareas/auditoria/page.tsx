@@ -17,6 +17,7 @@ import { DOMINIO } from "@/lib/dominio"
 import { formatFecha, formatFechaHora } from "@/lib/utils"
 import { ESTADO_TAREA_LABEL, ESTADO_TAREA_VARIANT } from "@/lib/tareas-ui"
 import type { EstadoTarea } from "@/lib/validators/tarea"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type Row = {
   id: string
@@ -37,11 +38,12 @@ export default async function AuditoriaTareasPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("AuditoriaTareasPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/tareas")
 
   const { data } = await supabase

@@ -28,6 +28,7 @@ import type {
   OrigenMovCaja,
   TipoMovCaja,
 } from "@/lib/validators/caja"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type MovRow = {
   id: string
@@ -52,11 +53,12 @@ export default async function CajaPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("CajaPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
   const q = (searchParams.q ?? "").trim()

@@ -21,6 +21,7 @@ import {
 import { formatFechaHora, formatPesos } from "@/lib/utils"
 import { METODO_PAGO_LABEL, ORIGEN_MOV_CAJA_LABEL, TIPO_MOV_CAJA_LABEL, TIPO_MOV_CAJA_VARIANT } from "@/lib/caja-ui"
 import type { MetodoPago, OrigenMovCaja, TipoMovCaja } from "@/lib/validators/caja"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type Preset = "mes" | "anio" | "custom"
 
@@ -58,7 +59,8 @@ export default async function ContabilidadPage({
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
-  const { data: profile } = await supabase.from("profiles").select("rol, activo").eq("id", user.id).single()
+  const { data: profile, error: perfilError } = await supabase.from("profiles").select("rol, activo").eq("id", user.id).single()
+  logPerfilError("ContabilidadPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
   const periodo = resolverPeriodo(searchParams)

@@ -28,6 +28,7 @@ import {
 } from "@/lib/ventas-ui"
 import { nombreVisible, type TipoCliente } from "@/lib/validators/cliente"
 import type { EstadoCobro, EstadoEntrega } from "@/lib/validators/venta"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type VentaRow = {
   id: string
@@ -53,11 +54,12 @@ export default async function VentasPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("VentasPage", perfilError)
   if (!profile?.activo) redirect("/login")
   // Marketing no vende ni cobra comisiones — no ve el módulo.
   if (profile.rol === ROL.MARKETING) redirect("/panel")

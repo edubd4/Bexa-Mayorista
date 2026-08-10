@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase/server"
 import { buscarGlobal } from "@/lib/search-sources"
 import { ROL } from "@/lib/constants"
+import { logPerfilError } from "@/lib/auth-guards"
 
 // GET /api/search?q=texto
 // Busca en las fuentes registradas en lib/search-sources.ts (hasta 5 por tipo).
@@ -18,11 +19,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 })
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("SearchRoute", perfilError)
   if (!profile?.activo) {
     return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 })
   }

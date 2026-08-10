@@ -13,6 +13,7 @@ import { DOMINIO, nuevoLabel } from "@/lib/dominio"
 import { puedeGestionarCampanas } from "@/lib/permisos"
 import { formatFecha, formatPesos } from "@/lib/utils"
 import type { EstadoCampanaEfectivo } from "@/lib/validators/campana"
+import { logPerfilError } from "@/lib/auth-guards"
 
 type CampanaRow = {
   id: string
@@ -37,8 +38,9 @@ export default async function CampanasPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles").select("rol, activo").eq("id", user.id).single()
+  logPerfilError("CampanasPage", perfilError)
   if (!profile?.activo) redirect("/login")
 
   // El vendedor entra a mirar qué se está promocionando. No crea campañas.

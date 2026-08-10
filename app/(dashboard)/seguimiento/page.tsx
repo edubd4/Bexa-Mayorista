@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { UserRoundSearch, Phone, MessageCircle } from "lucide-react"
-import { createServerClient } from "@/lib/supabase/server"
+import { requireAuthenticated } from "@/lib/auth-guards"
 import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import {
   Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow,
@@ -35,13 +35,13 @@ type InactivoRow = {
 }
 
 export default async function SeguimientoPage() {
-  const supabase = await createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/login")
-
-  const { data: profile } = await supabase
-    .from("profiles").select("rol, activo").eq("id", user.id).single()
-  if (!profile?.activo) redirect("/login")
+  // El gate es EXACTAMENTE `requireAuthenticated`: la pantalla la lee cualquier
+  // rol activo (la RLS de `clientes` ya filtra lo que ve el vendedor) y los dos
+  // motivos de rechazo van al mismo destino. El guard loguea el error de
+  // lectura del perfil en vez de descartarlo.
+  const guard = await requireAuthenticated()
+  if (!guard.ok) redirect("/login")
+  const { supabase } = guard
 
   const [{ data: umbralRow }, { data: negocioRow }, { data: tplRow }] = await Promise.all([
     supabase.from("configuracion").select("valor").eq("clave", "alerta_cliente_inactivo_dias").maybeSingle(),

@@ -4,17 +4,19 @@ import { ArrowLeft } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { CategoriasGastoManager } from "@/components/configuracion/CategoriasGastoManager"
 import { ROL } from "@/lib/constants"
+import { logPerfilError } from "@/lib/auth-guards"
 
 export default async function CategoriasGastoPage() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("CategoriasGastoPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
   const { data: categorias } = await supabase

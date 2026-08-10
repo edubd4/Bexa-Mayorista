@@ -25,6 +25,7 @@ import {
 } from "@/lib/ventas-ui"
 import { nombreVisible, type TipoCliente } from "@/lib/validators/cliente"
 import type { EstadoCobro, EstadoEntrega } from "@/lib/validators/venta"
+import { logPerfilError } from "@/lib/auth-guards"
 
 // ============================================================================
 // Panel principal — Ola D · KPIs reales sobre las vistas de 0010_reporting
@@ -47,11 +48,12 @@ export default async function PanelPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("nombre, rol")
     .eq("id", user.id)
     .single()
+  logPerfilError("PanelPage", perfilError)
 
   const nombre = profile?.nombre ?? user.email ?? "Usuario"
   const rol = profile?.rol as "admin" | "colaborador" | "marketing" | undefined

@@ -30,6 +30,7 @@ import {
   frecuenciaCorta,
 } from "@/lib/tareas-ui"
 import type { EstadoTarea, FrecuenciaTarea, PrioridadTarea } from "@/lib/validators/tarea"
+import { logPerfilError } from "@/lib/auth-guards"
 
 // UX del módulo (feedback del cliente, 2 iteraciones):
 //   1ª: tarjetas → "no se entiende". 2ª: tabla completa → "mucho dato
@@ -105,11 +106,12 @@ export default async function TareasPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabase
+  const { data: profile, error: perfilError } = await supabase
     .from("profiles")
     .select("rol, activo")
     .eq("id", user.id)
     .single()
+  logPerfilError("TareasPage", perfilError)
   if (!profile?.activo) redirect("/login")
   const esAdmin = profile.rol === ROL.ADMIN
 
