@@ -41,6 +41,8 @@ Al cerrar cada ola: los módulos nuevos o mejorados se cosechan hacia Forja
 ## Git y proceso
 
 - Branches `feat/<modulo>` · conventional commits · **sin Co-Authored-By** · 1 módulo = 1 PR.
+- **Identidad git: `docs/CUENTAS.md` es la fuente de verdad** (tabla por repo, cuenta `gh`,
+  cadena que verifica Vercel). Config LOCAL al repo, nunca `--global`, antes del primer commit.
 - `npm run build` verde antes de push. Migración SQL leída y aplicada ANTES del merge.
 - Preview de Vercel clickeado antes de mergear. `main` = producción.
 
