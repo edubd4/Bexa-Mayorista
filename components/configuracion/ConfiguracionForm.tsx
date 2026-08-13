@@ -43,11 +43,17 @@ export function ConfiguracionForm({ values }: Props) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 gap-6">
-        {CONFIG_FIELDS.map((f) => (
+        {CONFIG_FIELDS.map((f, i) => (
           <section
             key={f.clave}
             className="rounded-xl border border-app-line-soft bg-app-card p-5 space-y-3"
           >
+            {/* Título de sección cuando arranca un grupo nuevo (ej. ARCA) */}
+            {f.grupo && f.grupo !== CONFIG_FIELDS[i - 1]?.grupo && (
+              <h2 className="font-display text-xl font-semibold text-app-accent -mb-1">
+                {f.grupo}
+              </h2>
+            )}
             <div>
               <Label htmlFor={f.clave} className="text-app-text font-display text-base">
                 {f.label}

@@ -18,6 +18,14 @@ export const CONFIG_KEYS = {
   MONEDA_DEFAULT:               "moneda_default",
   TEMPLATE_REACTIVACION:        "template_reactivacion",
   ALERTA_CLIENTE_INACTIVO_DIAS: "alerta_cliente_inactivo_dias",
+  // Facturación electrónica ARCA (seeds en 0031)
+  AFIP_CUIT:                "afip_cuit",
+  AFIP_RAZON_SOCIAL:        "afip_razon_social",
+  AFIP_DOMICILIO:           "afip_domicilio",
+  AFIP_PUNTO_VENTA:         "afip_punto_venta",
+  AFIP_IVA_PCT:             "afip_iva_pct",
+  AFIP_IIBB:                "afip_iibb",
+  AFIP_INICIO_ACTIVIDADES:  "afip_inicio_actividades",
 } as const
 
 // Defaults hardcoded para claves de config. Si la fila no existe en la tabla
@@ -45,6 +53,9 @@ export type ConfigFieldSpec = {
   descripcion: string
   tipo: "text" | "number" | "moneda"
   placeholder?: string
+  /** Los campos con el mismo grupo se renderizan bajo un título de sección.
+   *  Sin grupo = sección general de arriba (datos del negocio). */
+  grupo?: string
 }
 
 export const CONFIG_FIELDS: ConfigFieldSpec[] = [
@@ -88,5 +99,62 @@ export const CONFIG_FIELDS: ConfigFieldSpec[] = [
     descripcion: "Alimenta la sección Seguimiento. Default 60. Poné un número menor para ser más proactivo, mayor para ver solo los muy vencidos.",
     tipo: "number",
     placeholder: "60",
+  },
+  // ── Facturación electrónica ARCA (0031) ──
+  // afip_cuit es la llave maestra: vacío = módulo apagado en toda la app.
+  {
+    grupo: "Facturación electrónica (ARCA)",
+    clave: CONFIG_KEYS.AFIP_CUIT,
+    label: "CUIT de la empresa emisora",
+    descripcion: "Con o sin guiones, lo normalizamos. VACÍO = facturación electrónica apagada: el botón Facturar y el circuito facturado no aparecen en ninguna pantalla.",
+    tipo: "text",
+    placeholder: "30-12345678-9",
+  },
+  {
+    grupo: "Facturación electrónica (ARCA)",
+    clave: CONFIG_KEYS.AFIP_RAZON_SOCIAL,
+    label: "Razón social",
+    descripcion: "Tal cual figura en ARCA. Encabeza la factura impresa.",
+    tipo: "text",
+    placeholder: "BEXA IMPORT S.A.",
+  },
+  {
+    grupo: "Facturación electrónica (ARCA)",
+    clave: CONFIG_KEYS.AFIP_DOMICILIO,
+    label: "Domicilio comercial",
+    descripcion: "El que figura en el comprobante impreso.",
+    tipo: "text",
+    placeholder: "Calle y número, ciudad, provincia",
+  },
+  {
+    grupo: "Facturación electrónica (ARCA)",
+    clave: CONFIG_KEYS.AFIP_PUNTO_VENTA,
+    label: "Punto de venta (Web Services)",
+    descripcion: "El número que ARCA asignó al dar de alta el punto de venta modo Web Services (Trámite 3 del instructivo). NO es el del talonario ni el del facturador en línea.",
+    tipo: "number",
+    placeholder: "3",
+  },
+  {
+    grupo: "Facturación electrónica (ARCA)",
+    clave: CONFIG_KEYS.AFIP_IVA_PCT,
+    label: "Alícuota de IVA (%)",
+    descripcion: "10.5, 21 o 27. Los precios del sistema son finales (IVA incluido); esta alícuota discrimina el neto en la Factura A.",
+    tipo: "text",
+    placeholder: "21",
+  },
+  {
+    grupo: "Facturación electrónica (ARCA)",
+    clave: CONFIG_KEYS.AFIP_IIBB,
+    label: "Nº de Ingresos Brutos",
+    descripcion: "Va en el pie de la factura impresa (RG 1415).",
+    tipo: "text",
+  },
+  {
+    grupo: "Facturación electrónica (ARCA)",
+    clave: CONFIG_KEYS.AFIP_INICIO_ACTIVIDADES,
+    label: "Inicio de actividades",
+    descripcion: "Fecha dd/mm/aaaa. Va en el pie de la factura impresa.",
+    tipo: "text",
+    placeholder: "01/03/2015",
   },
 ]
