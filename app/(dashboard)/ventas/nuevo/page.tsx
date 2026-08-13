@@ -5,6 +5,7 @@ import { createServerClient } from "@/lib/supabase/server"
 import { VentaForm } from "@/components/ventas/VentaForm"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
 import { logPerfilError } from "@/lib/auth-guards"
+import { normalizarCuit } from "@/lib/validators/facturacion"
 
 export default async function NuevaVentaPage() {
   const supabase = await createServerClient()
@@ -21,10 +22,10 @@ export default async function NuevaVentaPage() {
   // Marketing no puede registrar ventas — el RPC lo bloquea igual, pero rebotamos acá para no mostrar UI muerta.
   if (profile.rol === "marketing") redirect("/panel")
 
-  const [{ data: clientes }, { data: productos }, { data: campanas }] = await Promise.all([
+  const [{ data: clientes }, { data: productos }, { data: campanas }, { data: cfgCuit }] = await Promise.all([
     supabase
       .from("clientes")
-      .select("id, id_publico, nombre, apellido, razon_social, tipo, lista_precio_id")
+      .select("id, id_publico, nombre, apellido, razon_social, tipo, lista_precio_id, condicion_iva, documento")
       .eq("activo", true)
       .order("razon_social", { ascending: true, nullsFirst: false })
       .order("nombre")
@@ -41,6 +42,11 @@ export default async function NuevaVentaPage() {
       .eq("estado_efectivo", "ACTIVA")
       .order("fecha_inicio", { ascending: false })
       .limit(50),
+    supabase
+      .from("configuracion")
+      .select("valor")
+      .eq("clave", "afip_cuit")
+      .maybeSingle(),
   ])
 
   const ent = DOMINIO.ventas
@@ -73,6 +79,7 @@ export default async function NuevaVentaPage() {
           clientes={(clientes ?? []) as Parameters<typeof VentaForm>[0]["clientes"]}
           productos={(productos ?? []) as Parameters<typeof VentaForm>[0]["productos"]}
           campanasActivas={(campanas ?? []) as NonNullable<Parameters<typeof VentaForm>[0]["campanasActivas"]>}
+          afipConfigurada={Boolean(normalizarCuit(cfgCuit?.valor))}
         />
       </div>
     </div>

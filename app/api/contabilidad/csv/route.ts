@@ -31,13 +31,15 @@ export async function GET(req: Request) {
 
   const { data, error } = await supabase
     .from("movimientos_caja")
-    .select("id_publico, fecha, tipo, origen, monto, metodo_pago, descripcion")
+    .select("id_publico, fecha, tipo, origen, monto, metodo_pago, descripcion, venta:venta_id ( id, comprobantes ( id ) )")
     .gte("fecha", tsArgentina(desde))
     .lt("fecha", tsArgentina(hasta))
     .order("fecha", { ascending: true })
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
-  const headers = ["ID", "Fecha", "Tipo", "Origen", "Método", "Descripción", "Monto"]
+  // "Facturada" (0032): Sí/No para cobros de venta; vacío si el movimiento no
+  // tiene venta asociada (gastos, ajustes) — al contador le importa el circuito.
+  const headers = ["ID", "Fecha", "Tipo", "Origen", "Método", "Descripción", "Facturada", "Monto"]
   const rows: (string | number | null)[][] = (data ?? []).map((m) => {
     const mov = m as unknown as {
       id_publico: string
@@ -47,6 +49,7 @@ export async function GET(req: Request) {
       monto: number
       metodo_pago: MetodoPago
       descripcion: string | null
+      venta: { id: string; comprobantes: { id: string }[] } | null
     }
     return [
       mov.id_publico,
@@ -55,6 +58,7 @@ export async function GET(req: Request) {
       ORIGEN_MOV_CAJA_LABEL[mov.origen],
       METODO_PAGO_LABEL[mov.metodo_pago],
       mov.descripcion ?? "",
+      mov.venta ? (mov.venta.comprobantes.length > 0 ? "Sí" : "No") : "",
       formatPesos(Number(mov.monto)),
     ]
   })

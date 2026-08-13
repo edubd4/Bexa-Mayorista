@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache"
 import { requireAdmin } from "@/lib/auth-guards"
-import { configuracionUpdateSchema, type ConfiguracionUpdate } from "@/lib/validators/configuracion"
+import { CONFIG_KEYS, configuracionUpdateSchema, type ConfiguracionUpdate } from "@/lib/validators/configuracion"
+import { normalizarCuit } from "@/lib/validators/facturacion"
 import { logHistorial } from "@/lib/historial"
 import { TIPO_EVENTO } from "@/lib/constants"
 
@@ -12,6 +13,27 @@ export async function updateConfiguracion(updates: ConfiguracionUpdate): Promise
   const parsed = configuracionUpdateSchema.safeParse(updates)
   if (!parsed.success) {
     return { ok: false, error: "Datos inválidos" }
+  }
+
+  // ── Validaciones fiscales (0031/0032) — atajarlas ACÁ, no en ARCA ──────────
+  // Un CUIT mal guardado recién explota al emitir la primera factura, con un
+  // error críptico del web service. Mejor que rebote al guardar, con nombre.
+  const cuitRaw = parsed.data[CONFIG_KEYS.AFIP_CUIT]
+  if (cuitRaw !== undefined && cuitRaw.trim() !== "") {
+    const cuit = normalizarCuit(cuitRaw)
+    if (!cuit) {
+      return { ok: false, error: "El CUIT de la empresa no es válido (falla el dígito verificador). Revisalo." }
+    }
+    // Se guarda normalizado (11 dígitos): la emisión y la factura lo leen tal cual.
+    parsed.data[CONFIG_KEYS.AFIP_CUIT] = cuit
+  }
+  const ivaPct = parsed.data[CONFIG_KEYS.AFIP_IVA_PCT]
+  if (ivaPct !== undefined && ivaPct.trim() !== "" && !["10.5", "21", "27"].includes(ivaPct.trim())) {
+    return { ok: false, error: "La alícuota de IVA debe ser 10.5, 21 o 27." }
+  }
+  const ptoVta = parsed.data[CONFIG_KEYS.AFIP_PUNTO_VENTA]
+  if (ptoVta !== undefined && ptoVta.trim() !== "" && (!Number.isInteger(Number(ptoVta)) || Number(ptoVta) <= 0)) {
+    return { ok: false, error: "El punto de venta debe ser un número entero positivo." }
   }
 
   const guard = await requireAdmin()

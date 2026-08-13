@@ -26,7 +26,9 @@ import {
   ESTADO_ENTREGA_LABEL,
   ESTADO_ENTREGA_VARIANT,
 } from "@/lib/ventas-ui"
+import { formatNumeroComprobante } from "@/lib/facturacion-ui"
 import { nombreVisible, type TipoCliente } from "@/lib/validators/cliente"
+import type { TipoComprobante } from "@/lib/validators/facturacion"
 import type { EstadoCobro, EstadoEntrega } from "@/lib/validators/venta"
 import { logPerfilError } from "@/lib/auth-guards"
 
@@ -41,14 +43,26 @@ type VentaRow = {
   total: number
   saldo: number
   items_count: number
+  facturada: boolean
+  comp_tipo: TipoComprobante | null
+  comp_punto_venta: number | null
+  comp_numero: number | null
   cliente: { nombre: string; apellido: string | null; razon_social: string | null; tipo: TipoCliente } | null
   vendedor: { nombre: string } | null
+}
+
+// Fila de v_resumen_facturacion (0032). security_invoker: el vendedor ve SUS
+// totales, el admin los del negocio — misma RLS que la lista.
+type ResumenFacturacion = {
+  facturada: boolean
+  cantidad: number
+  monto_total: number
 }
 
 export default async function VentasPage({
   searchParams,
 }: {
-  searchParams: { q?: string; cobro?: string; entrega?: string }
+  searchParams: { q?: string; cobro?: string; entrega?: string; fact?: string }
 }) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -76,6 +90,7 @@ export default async function VentasPage({
       id, id_publico, fecha, cliente_id, vendedor_id,
       estado_entrega, estado_cobro,
       total, saldo, items_count,
+      facturada, comp_tipo, comp_punto_venta, comp_numero,
       cliente:cliente_id ( nombre, apellido, razon_social, tipo ),
       vendedor:vendedor_id ( nombre )
     `)
@@ -90,13 +105,22 @@ export default async function VentasPage({
   if (searchParams.entrega && ["ENTREGADA", "PEDIDO", "EN_PREPARACION", "CANCELADA"].includes(searchParams.entrega)) {
     query = query.eq("estado_entrega", searchParams.entrega)
   }
+  // Circuito fiscal (0032): SI = con comprobante, NO = sin facturar.
+  if (searchParams.fact === "SI") query = query.eq("facturada", true)
+  if (searchParams.fact === "NO") query = query.eq("facturada", false)
   const q = (searchParams.q ?? "").trim()
   if (q.length >= 2) {
     query = query.ilike("id_publico", `%${q}%`)
   }
 
-  const { data } = await query
+  const [{ data }, { data: resumenData }] = await Promise.all([
+    query,
+    supabase.from("v_resumen_facturacion").select("facturada, cantidad, monto_total"),
+  ])
   const rows = (data ?? []) as unknown as VentaRow[]
+  const resumen = (resumenData ?? []) as ResumenFacturacion[]
+  const facturado = resumen.find((r) => r.facturada)
+  const sinFacturar = resumen.find((r) => !r.facturada)
   const ent = DOMINIO.ventas
 
   return (
@@ -128,6 +152,47 @@ export default async function VentasPage({
           ojo="Registrar la venta descuenta el stock enseguida, pero NO entra la plata a la caja. La plata entra recién cuando cobrás la venta."
           seccion="registrar-venta"
         />
+
+        {/* Circuito fiscal (0032): los dos números que el dueño quiere ver
+            separados. Canceladas excluidas. Cada tarjeta filtra al click. */}
+        <section className="grid grid-cols-2 gap-3">
+          <Link
+            href={`${ent.ruta}?fact=SI`}
+            className={`rounded-xl border p-4 transition-colors ${
+              searchParams.fact === "SI"
+                ? "border-app-accent/60 bg-app-accent/10"
+                : "border-app-line-soft bg-app-card hover:border-app-accent/40"
+            }`}
+          >
+            <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">
+              Facturado
+            </p>
+            <p className="font-display text-xl md:text-2xl text-app-green mt-1">
+              {formatPesos(Number(facturado?.monto_total ?? 0))}
+            </p>
+            <p className="text-[11px] font-mono text-app-muted mt-0.5">
+              {Number(facturado?.cantidad ?? 0)} {Number(facturado?.cantidad ?? 0) === 1 ? "venta" : "ventas"} con comprobante
+            </p>
+          </Link>
+          <Link
+            href={`${ent.ruta}?fact=NO`}
+            className={`rounded-xl border p-4 transition-colors ${
+              searchParams.fact === "NO"
+                ? "border-app-accent/60 bg-app-accent/10"
+                : "border-app-line-soft bg-app-card hover:border-app-accent/40"
+            }`}
+          >
+            <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">
+              Sin facturar
+            </p>
+            <p className="font-display text-xl md:text-2xl text-app-amber mt-1">
+              {formatPesos(Number(sinFacturar?.monto_total ?? 0))}
+            </p>
+            <p className="text-[11px] font-mono text-app-muted mt-0.5">
+              {Number(sinFacturar?.cantidad ?? 0)} {Number(sinFacturar?.cantidad ?? 0) === 1 ? "venta" : "ventas"} solo registro interno
+            </p>
+          </Link>
+        </section>
 
         {/* Filtros */}
         <form action={ent.ruta} method="get" className="flex flex-wrap items-center gap-2">
@@ -162,6 +227,15 @@ export default async function VentasPage({
             <option value="EN_PREPARACION">En preparación</option>
             <option value="CANCELADA">Cancelada</option>
           </select>
+          <select
+            name="fact"
+            defaultValue={searchParams.fact ?? ""}
+            className="h-10 rounded-md bg-app-input border border-app-line px-3 text-sm text-app-text"
+          >
+            <option value="">Facturadas y sin facturar</option>
+            <option value="SI">Solo facturadas</option>
+            <option value="NO">Solo sin facturar</option>
+          </select>
           <Button type="submit" variant="outline" size="sm">Filtrar</Button>
         </form>
 
@@ -178,12 +252,13 @@ export default async function VentasPage({
                 <TableHead className="text-right hidden md:table-cell">Saldo</TableHead>
                 <TableHead className="hidden md:table-cell">Entrega</TableHead>
                 <TableHead>Cobro</TableHead>
+                <TableHead className="hidden lg:table-cell">Comprobante</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
-                <TableEmpty colSpan={esAdmin ? 8 : 7}>
-                  {q.length >= 2 || searchParams.cobro || searchParams.entrega
+                <TableEmpty colSpan={esAdmin ? 9 : 8}>
+                  {q.length >= 2 || searchParams.cobro || searchParams.entrega || searchParams.fact
                     ? "Ninguna venta coincide con estos filtros. Probá sacando alguno."
                     : "Todavía no hay ventas registradas. Registrá una con el botón de arriba: se descuenta el stock y se genera la comisión sola."}
                 </TableEmpty>
@@ -237,6 +312,20 @@ export default async function VentasPage({
                             />
                           )}
                       </div>
+                    </TableCell>
+                    {/* Circuito fiscal (0032): letra + número si tiene CAE,
+                        "Interna" si quedó solo en el registro del sistema. */}
+                    <TableCell className="hidden lg:table-cell">
+                      {v.facturada && v.comp_tipo && v.comp_numero != null && v.comp_punto_venta != null ? (
+                        <span className="font-mono text-xs text-app-green">
+                          {v.comp_tipo === "FACTURA_A" ? "A" : "B"}{" "}
+                          {formatNumeroComprobante(v.comp_punto_venta, Number(v.comp_numero))}
+                        </span>
+                      ) : v.estado_cobro === "CANCELADA" ? (
+                        <span className="text-app-muted text-xs">—</span>
+                      ) : (
+                        <Badge variant="gray">Interna</Badge>
+                      )}
                     </TableCell>
                   </LinkRow>
                 ))
