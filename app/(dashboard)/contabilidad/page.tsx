@@ -34,6 +34,14 @@ type MovRow = {
   monto: number
   metodo_pago: MetodoPago
   descripcion: string | null
+  // Circuito fiscal (0032): un cobro es "facturado" si su venta tiene
+  // comprobante emitido. Movimientos sin venta (gastos, ajustes) no aplican.
+  venta: { id: string; comprobantes: { id: string }[] } | null
+}
+
+function esFacturado(m: MovRow): boolean | null {
+  if (!m.venta) return null
+  return m.venta.comprobantes.length > 0
 }
 
 function resolverPeriodo(sp: { preset?: string; desde?: string; hasta?: string }): { preset: Preset; desde: string; hasta: string; label: string } {
@@ -67,16 +75,22 @@ export default async function ContabilidadPage({
 
   const { data } = await supabase
     .from("movimientos_caja")
-    .select("id, id_publico, fecha, tipo, origen, monto, metodo_pago, descripcion")
+    .select("id, id_publico, fecha, tipo, origen, monto, metodo_pago, descripcion, venta:venta_id ( id, comprobantes ( id ) )")
     .gte("fecha", tsArgentina(periodo.desde))
     .lt("fecha", tsArgentina(periodo.hasta))
     .order("fecha", { ascending: false })
     .limit(1000)
 
-  const rows = (data ?? []) as MovRow[]
+  const rows = (data ?? []) as unknown as MovRow[]
   const totalIngresos = rows.filter((r) => r.tipo === "INGRESO").reduce((s, r) => s + Number(r.monto), 0)
   const totalEgresos = rows.filter((r) => r.tipo === "EGRESO").reduce((s, r) => s + Number(r.monto), 0)
   const neto = totalIngresos - totalEgresos
+  // Desglose del circuito fiscal (0032): solo los ingresos ligados a una venta
+  // se clasifican; el resto (ajustes, aperturas) queda como "otros".
+  const ingresos = rows.filter((r) => r.tipo === "INGRESO")
+  const cobrosFacturados  = ingresos.filter((r) => esFacturado(r) === true).reduce((s, r) => s + Number(r.monto), 0)
+  const cobrosSinFacturar = ingresos.filter((r) => esFacturado(r) === false).reduce((s, r) => s + Number(r.monto), 0)
+  const otrosIngresos     = ingresos.filter((r) => esFacturado(r) === null).reduce((s, r) => s + Number(r.monto), 0)
 
   const csvUrl = `/api/contabilidad/csv?desde=${periodo.desde}&hasta=${periodo.hasta}`
 
@@ -131,6 +145,14 @@ export default async function ContabilidadPage({
           <KPI label={`Neto del período`}            value={formatPesos(neto)}          tone={neto >= 0 ? "green" : "red"} />
         </section>
 
+        {/* Circuito fiscal (0032): los ingresos del período separados por
+            facturado / sin facturar. "Otros" = ajustes y aperturas sin venta. */}
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <KPI label="Cobros facturados"   value={formatPesos(cobrosFacturados)}  tone="green" />
+          <KPI label="Cobros sin facturar" value={formatPesos(cobrosSinFacturar)} tone="amber" />
+          <KPI label="Otros ingresos"      value={formatPesos(otrosIngresos)}     tone="amber" />
+        </section>
+
         {/* Tabla */}
         <div className="rounded-xl border border-app-line-soft bg-app-card overflow-hidden">
           <Table>
@@ -159,7 +181,11 @@ export default async function ContabilidadPage({
                   <TableCell className="hidden lg:table-cell text-sm text-app-secondary">{METODO_PAGO_LABEL[m.metodo_pago]}</TableCell>
                   <TableCell>
                     <Badge variant={TIPO_MOV_CAJA_VARIANT[m.tipo]}>{TIPO_MOV_CAJA_LABEL[m.tipo]}</Badge>
-                    <p className="text-[10.5px] font-mono text-app-muted mt-0.5">{ORIGEN_MOV_CAJA_LABEL[m.origen]}</p>
+                    <p className="text-[10.5px] font-mono text-app-muted mt-0.5">
+                      {ORIGEN_MOV_CAJA_LABEL[m.origen]}
+                      {esFacturado(m) === true && <span className="text-app-green"> · facturada</span>}
+                      {esFacturado(m) === false && <span className="text-app-amber"> · sin facturar</span>}
+                    </p>
                   </TableCell>
                   <TableCell className={`text-right font-mono text-sm ${m.tipo === "INGRESO" ? "text-app-green" : "text-app-red"}`}>
                     {m.tipo === "INGRESO" ? "+" : "−"}{formatPesos(Number(m.monto))}
