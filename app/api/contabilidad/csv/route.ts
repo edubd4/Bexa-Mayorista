@@ -37,7 +37,7 @@ export async function GET(req: Request) {
     .order("fecha", { ascending: true })
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
-  // "Facturada" (0032): Sí/No para cobros de venta; vacío si el movimiento no
+  // "Facturada" (0033): Sí/No para cobros de venta; vacío si el movimiento no
   // tiene venta asociada (gastos, ajustes) — al contador le importa el circuito.
   const headers = ["ID", "Fecha", "Tipo", "Origen", "Método", "Descripción", "Facturada", "Monto"]
   const rows: (string | number | null)[][] = (data ?? []).map((m) => {

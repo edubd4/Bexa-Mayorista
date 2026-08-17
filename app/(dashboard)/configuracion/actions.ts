@@ -15,7 +15,7 @@ export async function updateConfiguracion(updates: ConfiguracionUpdate): Promise
     return { ok: false, error: "Datos inválidos" }
   }
 
-  // ── Validaciones fiscales (0031/0032) — atajarlas ACÁ, no en ARCA ──────────
+  // ── Validaciones fiscales (0031/0033) — atajarlas ACÁ, no en ARCA ──────────
   // Un CUIT mal guardado recién explota al emitir la primera factura, con un
   // error críptico del web service. Mejor que rebote al guardar, con nombre.
   const cuitRaw = parsed.data[CONFIG_KEYS.AFIP_CUIT]
