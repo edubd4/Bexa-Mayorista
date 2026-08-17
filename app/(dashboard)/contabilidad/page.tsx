@@ -34,7 +34,7 @@ type MovRow = {
   monto: number
   metodo_pago: MetodoPago
   descripcion: string | null
-  // Circuito fiscal (0032): un cobro es "facturado" si su venta tiene
+  // Circuito fiscal (0033): un cobro es "facturado" si su venta tiene
   // comprobante emitido. Movimientos sin venta (gastos, ajustes) no aplican.
   venta: { id: string; comprobantes: { id: string }[] } | null
 }
@@ -85,7 +85,7 @@ export default async function ContabilidadPage({
   const totalIngresos = rows.filter((r) => r.tipo === "INGRESO").reduce((s, r) => s + Number(r.monto), 0)
   const totalEgresos = rows.filter((r) => r.tipo === "EGRESO").reduce((s, r) => s + Number(r.monto), 0)
   const neto = totalIngresos - totalEgresos
-  // Desglose del circuito fiscal (0032): solo los ingresos ligados a una venta
+  // Desglose del circuito fiscal (0033): solo los ingresos ligados a una venta
   // se clasifican; el resto (ajustes, aperturas) queda como "otros".
   const ingresos = rows.filter((r) => r.tipo === "INGRESO")
   const cobrosFacturados  = ingresos.filter((r) => esFacturado(r) === true).reduce((s, r) => s + Number(r.monto), 0)
@@ -145,7 +145,7 @@ export default async function ContabilidadPage({
           <KPI label={`Neto del período`}            value={formatPesos(neto)}          tone={neto >= 0 ? "green" : "red"} />
         </section>
 
-        {/* Circuito fiscal (0032): los ingresos del período separados por
+        {/* Circuito fiscal (0033): los ingresos del período separados por
             facturado / sin facturar. "Otros" = ajustes y aperturas sin venta. */}
         <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <KPI label="Cobros facturados"   value={formatPesos(cobrosFacturados)}  tone="green" />

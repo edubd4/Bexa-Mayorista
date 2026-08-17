@@ -51,7 +51,7 @@ type VentaRow = {
   vendedor: { nombre: string } | null
 }
 
-// Fila de v_resumen_facturacion (0032). security_invoker: el vendedor ve SUS
+// Fila de v_resumen_facturacion (0033). security_invoker: el vendedor ve SUS
 // totales, el admin los del negocio — misma RLS que la lista.
 type ResumenFacturacion = {
   facturada: boolean
@@ -105,7 +105,7 @@ export default async function VentasPage({
   if (searchParams.entrega && ["ENTREGADA", "PEDIDO", "EN_PREPARACION", "CANCELADA"].includes(searchParams.entrega)) {
     query = query.eq("estado_entrega", searchParams.entrega)
   }
-  // Circuito fiscal (0032): SI = con comprobante, NO = sin facturar.
+  // Circuito fiscal (0033): SI = con comprobante, NO = sin facturar.
   if (searchParams.fact === "SI") query = query.eq("facturada", true)
   if (searchParams.fact === "NO") query = query.eq("facturada", false)
   const q = (searchParams.q ?? "").trim()
@@ -153,7 +153,7 @@ export default async function VentasPage({
           seccion="registrar-venta"
         />
 
-        {/* Circuito fiscal (0032): los dos números que el dueño quiere ver
+        {/* Circuito fiscal (0033): los dos números que el dueño quiere ver
             separados. Canceladas excluidas. Cada tarjeta filtra al click. */}
         <section className="grid grid-cols-2 gap-3">
           <Link
@@ -313,7 +313,7 @@ export default async function VentasPage({
                           )}
                       </div>
                     </TableCell>
-                    {/* Circuito fiscal (0032): letra + número si tiene CAE,
+                    {/* Circuito fiscal (0033): letra + número si tiene CAE,
                         "Interna" si quedó solo en el registro del sistema. */}
                     <TableCell className="hidden lg:table-cell">
                       {v.facturada && v.comp_tipo && v.comp_numero != null && v.comp_punto_venta != null ? (
