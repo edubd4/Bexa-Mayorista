@@ -26,6 +26,7 @@ export type IconKey =
   | "UserRoundSearch"
   | "GraduationCap"
   | "ListChecks"
+  | "ScanLine"
 
 export type NavItem = {
   label: string
@@ -57,6 +58,8 @@ export const NAV: NavGroup[] = [
       // ve sus tareas; el admin ve el tablero completo (0025).
       { label: DOMINIO.tareas.plural, href: DOMINIO.tareas.ruta, iconKey: "ListChecks" },
       { label: DOMINIO.ventas.plural,  href: DOMINIO.ventas.ruta,  iconKey: "ClipboardList", roles: [...OPERATIVO] },
+      // Mostrador (POS): venta rapida con escaner en la pasarela de pago.
+      { label: DOMINIO.pos.plural, href: DOMINIO.pos.ruta, iconKey: "ScanLine", roles: [...OPERATIVO] },
       { label: DOMINIO.compras.plural, href: DOMINIO.compras.ruta, iconKey: "Receipt",        roles: [ROL.ADMIN] },
       // Alertas es la rutina diaria del admin, no "análisis": vive con la operación.
       { label: "Alertas", href: "/alertas", iconKey: "AlertTriangle", roles: [ROL.ADMIN] },

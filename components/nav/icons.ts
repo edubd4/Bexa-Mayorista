@@ -24,6 +24,7 @@ import {
   UserRoundSearch,
   GraduationCap,
   ListChecks,
+  ScanLine,
   type LucideIcon,
 } from "lucide-react"
 import type { IconKey } from "@/lib/nav"
@@ -49,4 +50,5 @@ export const ICONS: Record<IconKey, LucideIcon> = {
   UserRoundSearch,
   GraduationCap,
   ListChecks,
+  ScanLine,
 }
