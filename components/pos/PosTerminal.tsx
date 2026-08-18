@@ -77,7 +77,9 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
   const [resultados, setResultados] = useState<ProductoPos[]>([])
   const [lineas, setLineas] = useState<Linea[]>([])
   const [metodo, setMetodo] = useState<MetodoPago>(METODO_PAGO.EFECTIVO)
-  const [facturar, setFacturar] = useState(true)
+  // Desmarcado por defecto: en el mostrador facturar es una decisión ACTIVA
+  // del que cobra (a diferencia de /ventas/nuevo, donde el default es emitir).
+  const [facturar, setFacturar] = useState(false)
   const [ultima, setUltima] = useState<UltimaVenta | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -215,6 +217,7 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
       setAviso(null)
       setClienteId(CONSUMIDOR_FINAL_ID)
       setMetodo(METODO_PAGO.EFECTIVO)
+      setFacturar(false)
       focusScan()
     })
   }
