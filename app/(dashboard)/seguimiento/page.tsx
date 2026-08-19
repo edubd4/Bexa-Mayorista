@@ -104,7 +104,7 @@ export default async function SeguimientoPage() {
                 <TableHead className="text-right">Días</TableHead>
                 <TableHead className="hidden md:table-cell text-right">Ventas</TableHead>
                 <TableHead className="hidden md:table-cell text-right">Ticket prom.</TableHead>
-                <TableHead className="text-right">Facturado</TableHead>
+                <TableHead className="text-right">Total comprado</TableHead>
                 <TableHead className="text-right w-40">Mensaje</TableHead>
               </TableRow>
             </TableHeader>

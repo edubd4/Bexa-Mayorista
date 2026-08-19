@@ -122,7 +122,7 @@ export default async function FinanzasPage() {
             <div>
               <h2 className="font-display font-semibold">Ganancia real · top 50 ventas</h2>
               <p className="text-[11px] font-mono text-app-muted mt-0.5">
-                Total ganancia {formatPesos(totalGanancia)} sobre {formatPesos(totalFacturadoConGanancia)} facturado ({margenPct.toFixed(1)}% margen)
+                Total ganancia {formatPesos(totalGanancia)} sobre {formatPesos(totalFacturadoConGanancia)} vendido ({margenPct.toFixed(1)}% margen)
               </p>
             </div>
           </div>
