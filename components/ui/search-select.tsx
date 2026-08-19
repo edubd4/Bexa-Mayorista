@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { createPortal } from "react-dom"
 import { Check, ChevronDown, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -14,6 +15,13 @@ import { cn } from "@/lib/utils"
 // 300+ productos es inusable en el mostrador.
 //
 // Filtra en el cliente sobre las opciones ya cargadas — no pega al server.
+//
+// El panel se renderiza en un PORTAL con posición fija (gotcha pagado
+// 2026-08-19): adentro de una tabla con overflow, un dropdown absolute queda
+// RECORTADO por el contenedor — en /ventas/nueva se veía una franja de dos
+// opciones. El portal lo saca de la jerarquía y lo posiciona sobre el
+// viewport; se reposiciona en scroll/resize y abre hacia arriba si no hay
+// lugar abajo.
 // ============================================================================
 
 export type SearchSelectOption = {
@@ -59,7 +67,13 @@ export function SearchSelect({
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState("")
   const [activo, setActivo] = React.useState(0)
+  // Posición del panel sobre el viewport (portal): abajo del trigger, o
+  // arriba si no entra. null = todavía no medimos (no renderizar el panel).
+  const [pos, setPos] = React.useState<
+    { left: number; width: number; top?: number; bottom?: number } | null
+  >(null)
   const rootRef = React.useRef<HTMLDivElement>(null)
+  const panelRef = React.useRef<HTMLDivElement>(null)
   const inputRef = React.useRef<HTMLInputElement>(null)
   const listRef = React.useRef<HTMLUListElement>(null)
 
@@ -78,17 +92,49 @@ export function SearchSelect({
   const visibles = filtradas.slice(0, MAX_VISIBLES)
   const ocultas = filtradas.length - visibles.length
 
-  // Cerrar al clickear afuera.
+  // Cerrar al clickear afuera — afuera del trigger Y del panel (el panel vive
+  // en un portal, no es descendiente de rootRef).
   React.useEffect(() => {
     if (!open) return
     function onMouseDown(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
+      const t = e.target as Node
+      if (rootRef.current?.contains(t)) return
+      if (panelRef.current?.contains(t)) return
+      setOpen(false)
     }
     document.addEventListener("mousedown", onMouseDown)
     return () => document.removeEventListener("mousedown", onMouseDown)
   }, [open])
+
+  // Medir y posicionar el panel; re-medir en scroll (capture: agarra el scroll
+  // de CUALQUIER contenedor, no solo window) y resize.
+  const medir = React.useCallback(() => {
+    const el = rootRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    // Alto máximo estimado del panel: búsqueda (~48) + lista (max-h-64 = 256).
+    const ALTO_PANEL = 312
+    const abreArriba = r.bottom + ALTO_PANEL > window.innerHeight && r.top > ALTO_PANEL
+    setPos(
+      abreArriba
+        ? { left: r.left, width: r.width, bottom: window.innerHeight - r.top + 4 }
+        : { left: r.left, width: r.width, top: r.bottom + 4 },
+    )
+  }, [])
+
+  React.useEffect(() => {
+    if (!open) {
+      setPos(null)
+      return
+    }
+    medir()
+    window.addEventListener("scroll", medir, true)
+    window.addEventListener("resize", medir)
+    return () => {
+      window.removeEventListener("scroll", medir, true)
+      window.removeEventListener("resize", medir)
+    }
+  }, [open, medir])
 
   // Al abrir: foco en la búsqueda, reset de estado.
   React.useEffect(() => {
@@ -148,8 +194,17 @@ export function SearchSelect({
         <ChevronDown className="w-4 h-4 text-app-muted shrink-0" />
       </button>
 
-      {open && (
-        <div className="absolute z-30 top-full left-0 right-0 mt-1 rounded-lg border border-app-line bg-app-card shadow-xl overflow-hidden">
+      {open && pos && createPortal(
+        <div
+          ref={panelRef}
+          style={{
+            position: "fixed",
+            left: pos.left,
+            width: pos.width,
+            top: pos.top,
+            bottom: pos.bottom,
+          }}
+          className="z-[95] rounded-lg border border-app-line bg-app-card shadow-xl overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-2 border-b border-app-line-soft">
             <Search className="w-4 h-4 text-app-muted shrink-0" />
             <input
@@ -204,7 +259,8 @@ export function SearchSelect({
               )}
             </ul>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
