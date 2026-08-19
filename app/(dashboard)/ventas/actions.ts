@@ -69,7 +69,13 @@ export async function resolverPrecio(
 // la factura ("emitir al registrar") antes de navegar a la ficha. Si la
 // factura falla, la venta YA está registrada — stock/caja/comisión no dependen
 // jamás de que ARCA responda.
-export async function registrarVenta(input: VentaInput): Promise<ActionResult<{ venta_id: string }>> {
+// Devuelve también el TOTAL que guardó la RPC (fuente de verdad): el POS
+// cobra con ese número exacto. Sumar precio*cantidad en floats de JS daba
+// 59.970000000000006 contra un numeric 59.97 y cobrar_venta rebotaba con
+// "Monto excede el saldo" (review anti-crisis #3).
+export async function registrarVenta(
+  input: VentaInput,
+): Promise<ActionResult<{ venta_id: string; total: number | null }>> {
   const parsed = ventaSchema.safeParse(input)
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
@@ -118,7 +124,7 @@ export async function registrarVenta(input: VentaInput): Promise<ActionResult<{ 
   // venta muestran stock viejo hasta que caduque el router cache (review #5).
   revalidatePath(DOMINIO.productos.ruta)
   revalidatePath(`${DOMINIO.ventas.ruta}/nuevo`)
-  return { ok: true, data: { venta_id: ventaId as string } }
+  return { ok: true, data: { venta_id: ventaId as string, total: v ? Number(v.total) : null } }
 }
 
 // ─── Cambiar estado de entrega (0021) ──────────────────────────────────────
@@ -240,9 +246,28 @@ export async function emitirFactura(input: EmitirFacturaInput): Promise<ActionRe
       .maybeSingle()
     if (yaEmitido) return { ok: false, error: "Esta venta ya tiene un comprobante emitido" }
 
+    // Y el estado también se re-chequea acá adentro (review #4): la venta
+    // pudo haberse CANCELADO entre nuestro primer select y el candado.
+    const { data: ventaFresca } = await supabase
+      .from("ventas")
+      .select("estado_cobro")
+      .eq("id", venta.id)
+      .maybeSingle()
+    if (!ventaFresca || ventaFresca.estado_cobro === "CANCELADA") {
+      return { ok: false, error: "Una venta cancelada no se factura" }
+    }
+
     return await emitirYRegistrar(supabase, user.id, venta)
   } finally {
-    await supabase.from("comprobantes_en_curso").delete().eq("venta_id", venta.id)
+    // Liberar SOLO el candado propio (review #2): si el nuestro fue robado por
+    // viejo mientras ARCA tardaba, el delete a secas borraría el candado del
+    // que lo robó y un tercero podría emitir en paralelo con él.
+    await supabase
+      .from("comprobantes_en_curso")
+      .delete()
+      .eq("venta_id", venta.id)
+      .eq("created_by", user.id)
+      .eq("iniciado_at", candado)
   }
 }
 
@@ -251,41 +276,31 @@ export async function emitirFactura(input: EmitirFacturaInput): Promise<ActionRe
 // puesto (deploy en el medio, timeout, etc.).
 const CANDADO_EMISION_STALE_MS = 2 * 60 * 1000
 
+// Devuelve el token de propiedad del candado (su iniciado_at exacto) o null
+// si otra emisión lo tiene. El token hace que la liberación sea SOLO del
+// candado propio — nunca del de otro proceso (review #2).
 async function adquirirCandadoEmision(
   supabase: Awaited<ReturnType<typeof createServerClient>>,
   ventaId: string,
   userId: string,
-): Promise<boolean> {
+): Promise<string | null> {
+  // Barrido de huérfanos (review #6): candados de procesos muertos, de
+  // CUALQUIER venta visible, se limpian acá — no esperan a que alguien
+  // reintente justo esa venta. Best effort: si falla, el insert decide igual.
+  await supabase
+    .from("comprobantes_en_curso")
+    .delete()
+    .lt("iniciado_at", new Date(Date.now() - CANDADO_EMISION_STALE_MS).toISOString())
+
   const intento = await supabase
     .from("comprobantes_en_curso")
     .insert({ venta_id: ventaId, created_by: userId })
-  if (!intento.error) return true
-
-  // Conflicto: hay un candado. ¿Sigue vivo o quedó colgado?
-  const { data: existente } = await supabase
-    .from("comprobantes_en_curso")
     .select("iniciado_at")
-    .eq("venta_id", ventaId)
-    .maybeSingle()
+    .single()
 
-  if (!existente) {
-    // El otro liberó justo entre nuestro insert y este select: un reintento.
-    const reintento = await supabase
-      .from("comprobantes_en_curso")
-      .insert({ venta_id: ventaId, created_by: userId })
-    return !reintento.error
-  }
-
-  if (Date.now() - new Date(existente.iniciado_at).getTime() < CANDADO_EMISION_STALE_MS) {
-    return false // emisión ajena EN CURSO de verdad — no pasar
-  }
-
-  // Candado colgado: robarlo (delete + insert; si otro roba primero, rebota).
-  await supabase.from("comprobantes_en_curso").delete().eq("venta_id", ventaId)
-  const robo = await supabase
-    .from("comprobantes_en_curso")
-    .insert({ venta_id: ventaId, created_by: userId })
-  return !robo.error
+  // Conflicto = emisión ajena en curso (los colgados ya se barrieron arriba).
+  if (intento.error || !intento.data) return null
+  return intento.data.iniciado_at as string
 }
 
 type VentaParaEmitir = {
