@@ -35,17 +35,22 @@ comment on column public.productos.controla_stock is
   'false = el producto no lleva stock: las ventas registran cantidad pero no validan disponibilidad ni generan movimiento. Ver 0034.';
 
 -- ─── 2 · Vista productos_catalogo con la columna nueva ──────────────────────
--- Columnas en el MISMO orden que 0005 + controla_stock al final.
+-- Columnas en el MISMO orden que la definición VIGENTE — que es la de la 0020
+-- (0005 + created_by al final), NO la de la 0005 — y controla_stock al final.
+-- Gotcha pagado (2026-08-19): recrearla desde la 0005 tiró 42P16 "cannot
+-- change name of view column created_by to controla_stock". CREATE OR REPLACE
+-- solo puede AGREGAR al final: copiá siempre la ÚLTIMA definición, no la
+-- primera.
 create or replace view public.productos_catalogo as
   select
     id, id_publico, sku, nombre, descripcion, categoria, marca, atributos,
     proveedor_id, precio_base, stock_actual, stock_minimo, activo,
-    created_at, updated_at,
+    created_at, updated_at, created_by,
     controla_stock
   from public.productos;
 
 comment on view public.productos_catalogo is
-  'Sin security_invoker A PROPOSITO: protege por seleccion de columnas (sin costo ni comision_pct). Con invoker el vendedor se queda sin catalogo y no puede vender. Ver 0016. controla_stock desde 0034.';
+  'Sin security_invoker A PROPOSITO: protege por seleccion de columnas (sin costo ni comision_pct). Con invoker el vendedor se queda sin catalogo y no puede vender. Ver 0016. created_by expuesto desde 0020 para el form de stock del vendedor. controla_stock desde 0034.';
 
 -- ─── 3 · registrar_venta — cuerpo vigente de 0030, cambios marcados ← 0034 ──
 create or replace function public.registrar_venta(
