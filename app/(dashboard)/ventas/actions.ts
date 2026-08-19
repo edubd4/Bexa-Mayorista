@@ -114,6 +114,10 @@ export async function registrarVenta(input: VentaInput): Promise<ActionResult<{ 
   }
 
   revalidatePath(DOMINIO.ventas.ruta)
+  // La venta movió stock: sin esto, /productos y el buscador de la nueva
+  // venta muestran stock viejo hasta que caduque el router cache (review #5).
+  revalidatePath(DOMINIO.productos.ruta)
+  revalidatePath(`${DOMINIO.ventas.ruta}/nuevo`)
   return { ok: true, data: { venta_id: ventaId as string } }
 }
 
@@ -363,5 +367,10 @@ export async function cancelarVenta(input: CancelarVentaInput): Promise<ActionRe
 
   revalidatePath(DOMINIO.ventas.ruta)
   revalidatePath(`${DOMINIO.ventas.ruta}/${parsed.data.venta_id}`)
+  // La cancelación repone stock: mismas rutas stale que registrarVenta (review #5).
+  revalidatePath(DOMINIO.productos.ruta)
+  revalidatePath(`${DOMINIO.ventas.ruta}/nuevo`)
+  // Y si la venta tenía cobros, la 0037 devuelve la plata a la caja.
+  revalidatePath(DOMINIO.caja.ruta)
   return { ok: true }
 }
