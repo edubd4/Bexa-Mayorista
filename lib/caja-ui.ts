@@ -1,4 +1,9 @@
-import type { MetodoPago, OrigenMovCaja, TipoMovCaja } from "@/lib/validators/caja"
+import type {
+  MetodoPago,
+  OrigenMovCaja,
+  PeriodicidadGastoFijo,
+  TipoMovCaja,
+} from "@/lib/validators/caja"
 
 export const TIPO_MOV_CAJA_LABEL: Record<TipoMovCaja, string> = {
   INGRESO: "Ingreso",
@@ -29,4 +34,10 @@ export const METODO_PAGO_LABEL: Record<MetodoPago, string> = {
   MERCADO_PAGO:     "Mercado Pago",
   CHEQUE:           "Cheque",
   OTRO:             "Otro",
+}
+
+export const PERIODICIDAD_GASTO_FIJO_LABEL: Record<PeriodicidadGastoFijo, string> = {
+  SEMANAL: "Semanal",
+  MENSUAL: "Mensual",
+  ANUAL:   "Anual",
 }
