@@ -40,6 +40,9 @@ type Props = {
   // iría al tacho, en silencio. En el ALTA sí se muestra: ahí el vendedor sabe
   // cuánto le salió porque lo trae él — escribir un costo no es leerlo (0017).
   mostrarCosto?: boolean
+  // Apagar el control de stock (0034) lo decide SOLO el admin. El RPC del
+  // vendedor no acepta el campo — mostrarle el checkbox sería mentirle.
+  mostrarControlStock?: boolean
 }
 
 // Fila del editor de tramos: permite vacíos mientras se tipea; al enviar,
@@ -58,6 +61,7 @@ const DEFAULTS: ProductoInput = {
   precio_base: 0,
   comision_pct: undefined,
   stock_minimo: 0,
+  controla_stock: true,
 }
 
 export function ProductoForm({
@@ -70,6 +74,7 @@ export function ProductoForm({
   mostrarComision = true,
   mostrarTramos = true,
   mostrarCosto = true,
+  mostrarControlStock = true,
 }: Props) {
   const router = useRouter()
   const toast = useToast()
@@ -377,6 +382,24 @@ export function ProductoForm({
 
       <section className="rounded-xl border border-app-line-soft bg-app-card p-6 space-y-5">
         <h2 className="font-display text-lg font-semibold">Stock</h2>
+        {mostrarControlStock && (
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4 mt-0.5 accent-app-accent"
+              checked={form.controla_stock ?? true}
+              onChange={(e) => update("controla_stock", e.target.checked)}
+            />
+            <span>
+              <span className="text-sm text-app-text">Controlar stock</span>
+              <span className="block text-[11px] text-app-muted font-mono mt-0.5">
+                Desmarcado: las ventas registran la cantidad vendida pero no
+                validan disponibilidad ni descuentan stock (servicios, productos
+                que no se cuentan). Se puede activar cuando quieras.
+              </span>
+            </span>
+          </label>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="stock_minimo">Stock mínimo</Label>

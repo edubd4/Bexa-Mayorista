@@ -56,6 +56,8 @@ type ProductoOption = {
   nombre: string
   precio_base: number
   stock_actual: number
+  // false = sin control de stock (0034): la venta no valida ni descuenta.
+  controla_stock: boolean
   activo: boolean
 }
 
@@ -129,7 +131,7 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
       productosOrdenados.map((p) => ({
         value: p.id,
         label: `${p.id_publico} · ${p.nombre}`,
-        hint: `stock ${p.stock_actual}`,
+        hint: p.controla_stock ? `stock ${p.stock_actual}` : "sin control",
       })),
     [productosOrdenados],
   )
@@ -371,7 +373,9 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
             ) : (
               lineas.map((l) => {
                 const prod = productoById.get(l.producto_id)
-                const excedeStock = prod && l.cantidad > prod.stock_actual
+                // Sin control de stock (0034) no hay nada que exceder: el RPC
+                // ya no valida ni mueve stock para esos productos.
+                const excedeStock = prod && prod.controla_stock && l.cantidad > prod.stock_actual
                 const sub = l.precio ? l.precio.precio_final * l.cantidad : 0
                 return (
                   <TableRow key={l.key}>

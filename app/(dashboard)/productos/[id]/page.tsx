@@ -35,6 +35,7 @@ type ProductoAdmin = {
   comision_pct: number | null
   stock_actual: number
   stock_minimo: number
+  controla_stock: boolean
   activo: boolean
 }
 
@@ -74,8 +75,8 @@ export default async function ProductoDetallePage({ params }: { params: Params }
 
   const table = esAdmin ? "productos" : "productos_catalogo"
   const columns = esAdmin
-    ? "id, id_publico, sku, nombre, descripcion, categoria, marca, atributos, proveedor_id, costo, precio_base, comision_pct, stock_actual, stock_minimo, activo"
-    : "id, id_publico, sku, nombre, descripcion, categoria, marca, atributos, proveedor_id, precio_base, stock_actual, stock_minimo, activo, created_by"
+    ? "id, id_publico, sku, nombre, descripcion, categoria, marca, atributos, proveedor_id, costo, precio_base, comision_pct, stock_actual, stock_minimo, controla_stock, activo"
+    : "id, id_publico, sku, nombre, descripcion, categoria, marca, atributos, proveedor_id, precio_base, stock_actual, stock_minimo, controla_stock, activo, created_by"
 
   const { data: prodRow } = await supabase
     .from(table)
@@ -160,7 +161,8 @@ export default async function ProductoDetallePage({ params }: { params: Params }
   }
 
   const ent = DOMINIO.productos
-  const stockBajo = producto.stock_minimo > 0 && producto.stock_actual <= producto.stock_minimo
+  const stockBajo =
+    producto.controla_stock && producto.stock_minimo > 0 && producto.stock_actual <= producto.stock_minimo
   const atributos = producto.atributos ?? {}
 
   return (
@@ -224,9 +226,14 @@ export default async function ProductoDetallePage({ params }: { params: Params }
 
         {/* KPIs */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KPI label="Stock actual" value={String(producto.stock_actual)}
+          <KPI label="Stock actual"
+               value={producto.controla_stock ? String(producto.stock_actual) : "Sin control"}
                tone={stockBajo ? "amber" : "accent"}
-               hint={producto.stock_minimo > 0 ? `mín ${producto.stock_minimo}` : undefined}
+               hint={
+                 !producto.controla_stock
+                   ? "no descuenta al vender"
+                   : producto.stock_minimo > 0 ? `mín ${producto.stock_minimo}` : undefined
+               }
                icon={stockBajo ? <AlertTriangle className="w-4 h-4" /> : <Package className="w-4 h-4" />}
           />
           <KPI label="Precio base" value={formatPesos(Number(producto.precio_base))} tone="accent" />
@@ -285,6 +292,7 @@ export default async function ProductoDetallePage({ params }: { params: Params }
               precio_base: producto.precio_base,
               comision_pct: esAdmin ? (producto as ProductoAdmin).comision_pct ?? undefined : undefined,
               stock_minimo: producto.stock_minimo,
+              controla_stock: producto.controla_stock,
               precios_tramo: tramos.map((t) => ({
                 cantidad_min: t.cantidad_min,
                 precio: Number(t.precio),
@@ -295,6 +303,7 @@ export default async function ProductoDetallePage({ params }: { params: Params }
             marcasExistentes={marcasExistentes}
             mostrarComision={esAdmin}
             mostrarCosto={esAdmin}
+            mostrarControlStock={esAdmin}
           />
         )}
 

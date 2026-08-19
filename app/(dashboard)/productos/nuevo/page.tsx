@@ -5,6 +5,7 @@ import { createServerClient } from "@/lib/supabase/server"
 import { ProductoForm } from "@/components/productos/ProductoForm"
 import { DOMINIO, nuevoLabel } from "@/lib/dominio"
 import { puedeCargarProductos, puedeVerCostos } from "@/lib/permisos"
+import { ROL } from "@/lib/constants"
 import { logPerfilError } from "@/lib/auth-guards"
 
 export default async function NuevoProductoPage() {
@@ -23,6 +24,9 @@ export default async function NuevoProductoPage() {
     redirect(DOMINIO.productos.ruta)
   }
   const mostrarComision = puedeVerCostos(profile.rol)
+  // Gate propio, NO alias de mostrarComision (lección del PR #31): apagar el
+  // control de stock es decisión del admin — el RPC del vendedor lo ignora.
+  const esAdmin = profile.rol === ROL.ADMIN
 
   const [{ data: proveedores }, { data: catRows }, { data: marcaRows }] = await Promise.all([
     supabase
@@ -89,6 +93,7 @@ export default async function NuevoProductoPage() {
           // No hace falta condición: la página ya redirige arriba a quien no
           // puede cargar productos.
           mostrarTramos
+          mostrarControlStock={esAdmin}
           proveedores={(proveedores ?? []) as { id: string; id_publico: string; nombre: string }[]}
           categoriasExistentes={categoriasExistentes}
           marcasExistentes={marcasExistentes}

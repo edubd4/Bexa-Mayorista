@@ -32,6 +32,7 @@ type ProductoRow = {
   costo?: number     // solo llega si el usuario es admin
   stock_actual: number
   stock_minimo: number
+  controla_stock: boolean
   activo: boolean
   proveedor: { id: string; nombre: string } | null
 }
@@ -61,8 +62,8 @@ export default async function ProductosPage({
   // aunque la RLS de `productos` es admin-only, el fetch va a la vista para vendedor.
   const table = esAdmin ? "productos" : "productos_catalogo"
   const columns = esAdmin
-    ? "id, id_publico, sku, nombre, categoria, marca, costo, precio_base, stock_actual, stock_minimo, activo, proveedor:proveedor_id (id, nombre)"
-    : "id, id_publico, sku, nombre, categoria, marca, precio_base, stock_actual, stock_minimo, activo, proveedor:proveedor_id (id, nombre)"
+    ? "id, id_publico, sku, nombre, categoria, marca, costo, precio_base, stock_actual, stock_minimo, controla_stock, activo, proveedor:proveedor_id (id, nombre)"
+    : "id, id_publico, sku, nombre, categoria, marca, precio_base, stock_actual, stock_minimo, controla_stock, activo, proveedor:proveedor_id (id, nombre)"
 
   const q = (searchParams.q ?? "").trim()
   const estadoFilter = searchParams.estado === "inactivos" ? false
@@ -106,7 +107,7 @@ export default async function ProductosPage({
   // Filtro de stock bajo se hace en JS (no podemos comparar dos columnas en supabase-js).
   if (stockFilter) {
     productos = productos.filter(
-      (p) => p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo,
+      (p) => p.controla_stock && p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo,
     )
   }
 
@@ -221,7 +222,8 @@ export default async function ProductosPage({
                 </TableEmpty>
               ) : (
                 productos.map((p) => {
-                  const stockBajo = p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo
+                  const stockBajo =
+                    p.controla_stock && p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo
                   return (
                     <LinkRow key={p.id} href={`${ent.ruta}/${p.id}`}>
                       <TableCell className="font-mono text-app-accent text-xs">
@@ -262,12 +264,18 @@ export default async function ProductosPage({
                         {formatPesos(Number(p.precio_base))}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm">
-                        <span className={stockBajo ? "text-app-amber" : ""}>
-                          {p.stock_actual}
-                          {stockBajo && <AlertTriangle className="inline-block w-3 h-3 ml-1" />}
-                        </span>
-                        {p.stock_minimo > 0 && (
-                          <span className="text-app-muted"> /{p.stock_minimo}</span>
+                        {p.controla_stock ? (
+                          <>
+                            <span className={stockBajo ? "text-app-amber" : ""}>
+                              {p.stock_actual}
+                              {stockBajo && <AlertTriangle className="inline-block w-3 h-3 ml-1" />}
+                            </span>
+                            {p.stock_minimo > 0 && (
+                              <span className="text-app-muted"> /{p.stock_minimo}</span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-app-muted text-[11px]">sin control</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">

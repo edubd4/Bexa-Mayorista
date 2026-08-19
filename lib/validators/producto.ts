@@ -56,6 +56,10 @@ export const productoSchema = z.object({
   precio_base:   z.preprocess(numeroPreprocess, z.number().nonnegative("El precio no puede ser negativo").default(0)),
   comision_pct:  z.preprocess(numeroPreprocess, z.number().min(0).max(100, "La comisión va de 0 a 100").optional()),
   stock_minimo:  z.preprocess(numeroPreprocess, z.number().int().nonnegative().default(0)),
+  // false = sin control de stock (0034): la venta registra cantidad pero no
+  // valida ni mueve stock. Solo lo edita el admin; el RPC del vendedor no lo
+  // acepta y lo deja como está.
+  controla_stock: z.boolean().default(true),
   // Solo lo manda el form del admin (la política de precios es suya). No es
   // columna de `productos`: las actions lo separan y reconcilian contra
   // productos_precios_tramo.
