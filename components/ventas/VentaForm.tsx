@@ -273,17 +273,30 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
       // Cobro en el acto: mismo orden que el mostrador (registrar → cobrar →
       // facturar). Si el cobro falla, la venta YA quedó registrada — se avisa
       // y se cobra desde la ficha; nunca se pierde la venta por esto.
-      // El monto va redondeado a 2 decimales: sumar precio*cantidad en floats
-      // puede dar 59.970000000000006 y cobrar_venta lo rechaza por "excede el
-      // saldo" contra el numeric exacto de la venta.
+      //
+      // El monto sale del TOTAL QUE GUARDÓ la RPC, no de la suma del client:
+      // sumar precio*cantidad en floats da 59.970000000000006 contra el
+      // numeric exacto 59.97 y cobrar_venta lo rechaza por "excede el saldo"
+      // (review 2026-08-19 #3). El redondeo queda de fallback por si la
+      // lectura del total no vuelve.
+      const totalCobrable = res.data!.total ?? Math.round(totales.total * 100) / 100
       let cobroFallo: string | null = null
       if (cobrarAhora) {
         const cobro = await cobrarVenta({
           venta_id: ventaId,
-          monto:    Math.round(totales.total * 100) / 100,
+          monto:    totalCobrable,
           metodo:   metodoPago,
         })
         if (!cobro.ok) cobroFallo = cobro.error
+      }
+
+      // Si el total guardado no coincide con el que se mostró en pantalla (un
+      // precio cambió entre resolver y registrar), el vendedor le cantó otro
+      // número al cliente: se avisa con los dos importes.
+      if (Math.abs(totalCobrable - totales.total) >= 0.01) {
+        toast.error(
+          `Ojo: el total de la venta quedó en ${formatPesos(totalCobrable)} y en pantalla decía ${formatPesos(totales.total)} — revisá el precio con el cliente.`,
+        )
       }
 
       // Mejora premium #1: factura en el mismo acto. Si ARCA falla, la venta
