@@ -223,6 +223,21 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
                 totalFmt={formatPesos(Number(venta.total))}
               />
             )}
+            {/* El módulo apagado se EXPLICA — el botón que no aparece sin decir
+                por qué se lee como "está roto" (reporte 2026-08-19). Solo en
+                ventas facturables (con comprobante ya emitido no falta nada). */}
+            {!afipConfigurada && !comprobanteRow && venta.estado_cobro !== "CANCELADA" && (
+              <p className="text-[11px] font-mono text-app-muted text-right max-w-[240px]">
+                Facturación ARCA sin configurar — se activa cargando el CUIT en{" "}
+                {esAdmin ? (
+                  <Link href="/configuracion" className="underline hover:text-app-accent">
+                    Configuración
+                  </Link>
+                ) : (
+                  "Configuración (lo hace el admin)"
+                )}
+              </p>
+            )}
             {puedeCancelar && (
               <CancelarVentaButton ventaId={venta.id} idPublico={venta.id_publico} />
             )}

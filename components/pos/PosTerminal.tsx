@@ -158,10 +158,20 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
     agregarProducto(res.data)
   }
 
+  // Mismo anti-carrera que los precios, para el buscador: solo la respuesta
+  // del último término tipeado pisa la lista (las viejas llegan tarde y se
+  // descartan). Sin esto, tipear rápido podía dejar resultados de un término
+  // anterior.
+  const busquedaSeq = useRef(0)
+
   async function onBuscarNombre(q: string) {
     setBusqueda(q)
-    if (q.trim().length < 2) { setResultados([]); return }
+    const reqId = ++busquedaSeq.current
+    // 1 sola letra no filtra nada útil; vacío SÍ busca (lista inicial del
+    // catálogo — pedido del cliente 2026-08-19: desplegar sin tipear).
+    if (q.trim().length === 1) { setResultados([]); return }
     const res = await buscarProductosPorNombre(q)
+    if (busquedaSeq.current !== reqId) return
     setResultados(res.ok ? res.data : [])
   }
 
@@ -293,11 +303,19 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
             value={busqueda}
             autoComplete="off"
             onChange={(e) => void onBuscarNombre(e.target.value)}
+            // Al enfocar sin texto: desplegar la lista inicial del catálogo.
+            onFocus={() => { if (!busqueda.trim()) void onBuscarNombre("") }}
+            // El timeout deja que el click en una opción llegue antes del blur
+            // (la lista además frena el blur con preventDefault en mouseDown).
+            onBlur={() => setTimeout(() => setResultados([]), 120)}
             placeholder="Nombre o ID del producto"
             className="h-12"
           />
           {resultados.length > 0 && (
-            <ul className="absolute z-20 top-full left-0 right-0 mt-1 rounded-lg border border-app-line bg-app-card shadow-xl overflow-hidden">
+            <ul
+              onMouseDown={(e) => e.preventDefault()}
+              className="absolute z-20 top-full left-0 right-0 mt-1 rounded-lg border border-app-line bg-app-card shadow-xl overflow-hidden max-h-72 overflow-y-auto"
+            >
               {resultados.map((p) => (
                 <li key={p.id}>
                   <button
@@ -431,6 +449,14 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
               <FileCheck2 className="w-3.5 h-3.5" />
               Emitir {tipoFactura ? TIPO_COMPROBANTE_LABEL[tipoFactura] : "factura"}
             </label>
+          )}
+          {/* El módulo apagado se EXPLICA — un checkbox que desaparece sin
+              decir por qué se lee como "está roto" (reporte 2026-08-19). */}
+          {!afipConfigurada && (
+            <p className="text-[11px] font-mono text-app-muted pt-1">
+              Facturación ARCA sin configurar — se activa cargando el CUIT en
+              Configuración (lo hace el admin).
+            </p>
           )}
         </div>
 
