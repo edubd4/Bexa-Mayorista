@@ -54,6 +54,13 @@ begin
     raise exception 'La venta tiene un comprobante fiscal emitido (CAE) — no se puede cancelar sin emitir la nota de crédito correspondiente. Consultalo con el contador.';
   end if;
 
+  -- ← 0040: y la carrera inversa — cancelar MIENTRAS hay una emisión en vuelo
+  -- (candado 0038 tomado) produciría venta cancelada + CAE recién emitido.
+  -- El candado ya existe: usarlo también acá.
+  if exists (select 1 from public.comprobantes_en_curso where venta_id = p_venta_id) then
+    raise exception 'Hay una emisión de factura en curso para esta venta — esperá unos segundos y reintentá.';
+  end if;
+
   -- Autorización: admin, o el vendedor que la hizo si aún no cobró nada
   v_rol := public.current_user_rol();
   if v_rol is null then raise exception 'Usuario sin perfil activo'; end if;  -- ← 0030
