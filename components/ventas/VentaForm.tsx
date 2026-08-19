@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { FileCheck2, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { SearchSelect, type SearchSelectOption } from "@/components/ui/search-select"
 import { Label } from "@/components/ui/label"
 import { NumberInput } from "@/components/ui/number-input"
 import { Select } from "@/components/ui/select"
@@ -120,6 +121,16 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
   )
   const productoById = useMemo(
     () => new Map(productosOrdenados.map((p) => [p.id, p])),
+    [productosOrdenados],
+  )
+  // Opciones del buscador: matchea por ID público y nombre (tipear filtra).
+  const productoOptions = useMemo<SearchSelectOption[]>(
+    () =>
+      productosOrdenados.map((p) => ({
+        value: p.id,
+        label: `${p.id_publico} · ${p.nombre}`,
+        hint: `stock ${p.stock_actual}`,
+      })),
     [productosOrdenados],
   )
 
@@ -365,17 +376,14 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
                 return (
                   <TableRow key={l.key}>
                     <TableCell>
-                      <Select
+                      <SearchSelect
+                        options={productoOptions}
                         value={l.producto_id}
-                        onChange={(e) => updateProducto(l.key, e.target.value)}
-                      >
-                        <option value="">— Elegí producto —</option>
-                        {productosOrdenados.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.id_publico} · {p.nombre} (stock {p.stock_actual})
-                          </option>
-                        ))}
-                      </Select>
+                        onChange={(v) => updateProducto(l.key, v)}
+                        placeholder="— Elegí producto —"
+                        searchPlaceholder="Buscá por ID o nombre…"
+                        emptyText="Ningún producto matchea"
+                      />
                       {l.precio && (
                         <p className="mt-1 text-[10.5px] font-mono text-app-muted">
                           {explicarOrigenPrecio(l.precio.origen)}
