@@ -10,7 +10,17 @@ import { createServerClient } from '@supabase/ssr'
 // MIDDLEWARE_INVOCATION_FAILED en TODA la app — el sitio queda inservible.
 // La lógica de auth SIEMPRE va en try/catch: si falla, tratamos como "sin
 // sesión" y dejamos que las páginas server-side manejen la redirección.
+//
+// Gotcha pagado (BEXA 2026-08-19): el try/catch NO cubre un fetch que se
+// cuelga sin resolver — eso agota el límite del middleware de Vercel y tira
+// MIDDLEWARE_INVOCATION_TIMEOUT (504) igual. El fetch hacia Supabase lleva
+// AbortSignal.timeout: si auth no contesta a tiempo, el abort cae en el
+// catch y se trata como "sin sesión".
 // ============================================================================
+
+// Tope de espera al auth de Supabase. Normalmente responde en <0.5s; si en
+// 5s no contestó, mejor un redirect a /login que un 504 en toda la ruta.
+const AUTH_FETCH_TIMEOUT_MS = 5000
 
 // Public path check factorizado — se usa en el happy-path y en el catch.
 function isPublic(pathname: string): boolean {
@@ -48,6 +58,10 @@ export async function middleware(request: NextRequest) {
 
   try {
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+          fetch(input, { ...init, signal: AbortSignal.timeout(AUTH_FETCH_TIMEOUT_MS) }),
+      },
       cookies: {
         getAll() {
           return request.cookies.getAll()
