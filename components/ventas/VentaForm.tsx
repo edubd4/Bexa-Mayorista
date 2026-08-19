@@ -131,7 +131,7 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
       productosOrdenados.map((p) => ({
         value: p.id,
         label: `${p.id_publico} · ${p.nombre}`,
-        hint: `stock ${p.stock_actual}`,
+        hint: p.controla_stock ? `stock ${p.stock_actual}` : "sin control",
       })),
     [productosOrdenados],
   )
