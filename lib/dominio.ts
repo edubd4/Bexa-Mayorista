@@ -148,6 +148,13 @@ export const DOMINIO = {
     icono: "ListChecks",
     genero: "f",
   },
+  pos: {
+    singular: "Mostrador",
+    plural: "Mostrador",
+    ruta: "/pos",
+    icono: "ScanLine",
+    genero: "m",
+  },
   campanas: {
     singular: "Campaña",
     plural: "Campañas",
