@@ -211,6 +211,98 @@ export async function emitirFactura(input: EmitirFacturaInput): Promise<ActionRe
     .maybeSingle()
   if (existente) return { ok: false, error: "Esta venta ya tiene un comprobante emitido" }
 
+  // ── Candado anti doble emisión (0038) ─────────────────────────────────────
+  // Sin esto, dos emisiones simultáneas (vendedor con "emitir al registrar" +
+  // admin en la ficha, o dos pestañas) pasaban las dos el check de arriba y
+  // ARCA autorizaba DOS CAE — el segundo quedaba huérfano en ARCA. El candado
+  // es un insert con PK venta_id: atómico, el segundo rebota antes de tocar
+  // ARCA. Se libera SIEMPRE en el finally; un candado colgado (proceso muerto)
+  // se roba a los 2 minutos.
+  const candado = await adquirirCandadoEmision(supabase, venta.id, user.id)
+  if (!candado) {
+    return {
+      ok: false,
+      error: "Hay otra emisión en curso para esta venta — esperá unos segundos y refrescá antes de reintentar.",
+    }
+  }
+
+  try {
+    // Re-check con el candado en mano: la otra emisión pudo haber TERMINADO
+    // entre nuestro primer check y la toma del candado.
+    const { data: yaEmitido } = await supabase
+      .from("comprobantes")
+      .select("id")
+      .eq("venta_id", venta.id)
+      .maybeSingle()
+    if (yaEmitido) return { ok: false, error: "Esta venta ya tiene un comprobante emitido" }
+
+    return await emitirYRegistrar(supabase, user.id, venta)
+  } finally {
+    await supabase.from("comprobantes_en_curso").delete().eq("venta_id", venta.id)
+  }
+}
+
+// Cuánto puede vivir un candado antes de considerarlo colgado. Una emisión
+// normal tarda segundos; 2 minutos ya es un proceso que murió con el candado
+// puesto (deploy en el medio, timeout, etc.).
+const CANDADO_EMISION_STALE_MS = 2 * 60 * 1000
+
+async function adquirirCandadoEmision(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  ventaId: string,
+  userId: string,
+): Promise<boolean> {
+  const intento = await supabase
+    .from("comprobantes_en_curso")
+    .insert({ venta_id: ventaId, created_by: userId })
+  if (!intento.error) return true
+
+  // Conflicto: hay un candado. ¿Sigue vivo o quedó colgado?
+  const { data: existente } = await supabase
+    .from("comprobantes_en_curso")
+    .select("iniciado_at")
+    .eq("venta_id", ventaId)
+    .maybeSingle()
+
+  if (!existente) {
+    // El otro liberó justo entre nuestro insert y este select: un reintento.
+    const reintento = await supabase
+      .from("comprobantes_en_curso")
+      .insert({ venta_id: ventaId, created_by: userId })
+    return !reintento.error
+  }
+
+  if (Date.now() - new Date(existente.iniciado_at).getTime() < CANDADO_EMISION_STALE_MS) {
+    return false // emisión ajena EN CURSO de verdad — no pasar
+  }
+
+  // Candado colgado: robarlo (delete + insert; si otro roba primero, rebota).
+  await supabase.from("comprobantes_en_curso").delete().eq("venta_id", ventaId)
+  const robo = await supabase
+    .from("comprobantes_en_curso")
+    .insert({ venta_id: ventaId, created_by: userId })
+  return !robo.error
+}
+
+type VentaParaEmitir = {
+  id: string
+  id_publico: string
+  total: number
+  cliente: {
+    documento: string | null
+    condicion_iva: CondicionIva
+  } | null
+}
+
+// El flujo de emisión propiamente dicho — SIEMPRE corre con el candado de
+// emitirFactura tomado. No llamar desde otro lado sin él.
+async function emitirYRegistrar(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  userId: string,
+  venta: VentaParaEmitir,
+): Promise<ActionResult> {
+  if (!venta.cliente) return { ok: false, error: "La venta no tiene cliente asociado" }
+
   // Config fiscal (seeds 0031). afip_cuit vacío = módulo deshabilitado.
   const { data: config } = await supabase
     .from("configuracion")
@@ -296,7 +388,7 @@ export async function emitirFactura(input: EmitirFacturaInput): Promise<ActionRe
     total,
     cae: emision.cae,
     cae_vencimiento: emision.caeVencimiento,
-    created_by: user.id,
+    created_by: userId,
   })
 
   if (insertError) {
@@ -308,7 +400,7 @@ export async function emitirFactura(input: EmitirFacturaInput): Promise<ActionRe
       entidadTipo: "venta",
       entidadId: venta.id_publico,
       payload: { cae: emision.cae, numero: emision.numero, punto_venta: puntoVenta, tipo },
-      userId: user.id,
+      userId,
     })
     return {
       ok: false,
@@ -322,7 +414,7 @@ export async function emitirFactura(input: EmitirFacturaInput): Promise<ActionRe
     entidadTipo: "venta",
     entidadId: venta.id_publico,
     payload: { tipo, numero: emision.numero, cae: emision.cae, condicion_iva: condicion },
-    userId: user.id,
+    userId,
   })
 
   revalidatePath(`${DOMINIO.ventas.ruta}/${venta.id}`)
