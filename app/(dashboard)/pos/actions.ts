@@ -53,23 +53,30 @@ export async function buscarProductoPorCodigo(codigo: string): Promise<ActionRes
 }
 
 // ─── Fallback: buscar por nombre (productos sin código o código ilegible) ───
+// Con término VACÍO devuelve los primeros del catálogo: el mostrador puede
+// desplegar la lista sin tipear (pedido del cliente 2026-08-19). Con 1 letra
+// no busca (demasiado ancho); con 2+ filtra.
 export async function buscarProductosPorNombre(q: string): Promise<ActionResult<ProductoPos[]>> {
   // Comas y paréntesis rompen la sintaxis del filtro .or() de PostgREST —
   // se neutralizan antes de interpolar (el término viene de un input libre).
   const term = q.trim().replace(/[,()]/g, " ").trim()
-  if (term.length < 2) return { ok: true, data: [] }
+  if (term.length === 1) return { ok: true, data: [] }
 
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: "No autenticado" }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("productos_catalogo")
     .select(COLS)
     .eq("activo", true)
-    .or(`nombre.ilike.%${term}%,id_publico.ilike.%${term}%`)
     .order("nombre")
-    .limit(8)
+
+  query = term.length === 0
+    ? query.limit(12)
+    : query.or(`nombre.ilike.%${term}%,id_publico.ilike.%${term}%`).limit(8)
+
+  const { data, error } = await query
 
   if (error) return { ok: false, error: error.message }
   return { ok: true, data: (data ?? []) as ProductoPos[] }

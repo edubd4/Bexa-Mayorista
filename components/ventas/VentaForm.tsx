@@ -495,6 +495,14 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
             Emitir {tipoFactura ? TIPO_COMPROBANTE_LABEL[tipoFactura] : "factura"} al registrar
           </label>
         )}
+        {/* El módulo apagado se EXPLICA — un checkbox que desaparece sin decir
+            por qué se lee como "está roto" (reporte 2026-08-19). */}
+        {!afipConfigurada && (
+          <p className="text-[11px] font-mono text-app-muted sm:mr-auto">
+            Facturación ARCA sin configurar — se activa cargando el CUIT en
+            Configuración (lo hace el admin).
+          </p>
+        )}
         <Button variant="ghost" asChild disabled={isPending}>
           <Link href={DOMINIO.ventas.ruta}>Cancelar</Link>
         </Button>
