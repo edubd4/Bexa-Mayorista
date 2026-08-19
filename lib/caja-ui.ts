@@ -19,11 +19,13 @@ export const ORIGEN_MOV_CAJA_LABEL: Record<OrigenMovCaja, string> = {
   OTRO:        "Otro",
 }
 
+// "Posnet" es como el cliente llama al cobro con tarjeta en el mostrador —
+// presentación BEXA, el enum de esquema no cambia (regla de oro #1).
 export const METODO_PAGO_LABEL: Record<MetodoPago, string> = {
   EFECTIVO:         "Efectivo",
   TRANSFERENCIA:    "Transferencia",
-  TARJETA_DEBITO:   "Tarjeta débito",
-  TARJETA_CREDITO:  "Tarjeta crédito",
+  TARJETA_DEBITO:   "Posnet · débito",
+  TARJETA_CREDITO:  "Posnet · crédito",
   MERCADO_PAGO:     "Mercado Pago",
   CHEQUE:           "Cheque",
   OTRO:             "Otro",
