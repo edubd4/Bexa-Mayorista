@@ -214,8 +214,12 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
         return
       }
       const ventaId = res.data!.venta_id
+      // Cobrar con el total que GUARDÓ la RPC, no con la suma de floats del
+      // client (review #3: 59.970000000000006 vs 59.97 → "excede el saldo").
+      // También cubre un precio que cambió entre resolver y registrar.
+      const totalReal = res.data!.total ?? Math.round(total * 100) / 100
 
-      const cobro = await cobrarVenta({ venta_id: ventaId, monto: total, metodo })
+      const cobro = await cobrarVenta({ venta_id: ventaId, monto: totalReal, metodo })
       if (!cobro.ok) {
         toast.error(`Venta registrada, pero el cobro falló: ${cobro.error} — cobrala desde la ficha.`)
       }
@@ -230,9 +234,9 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
       }
 
       toast.success(
-        `Venta cerrada · ${formatPesos(total)}${cobro.ok ? ` · ${METODO_PAGO_LABEL[metodo]}` : ""}${facturada && tipoFactura ? ` · ${TIPO_COMPROBANTE_LABEL[tipoFactura]}` : ""}`,
+        `Venta cerrada · ${formatPesos(totalReal)}${cobro.ok ? ` · ${METODO_PAGO_LABEL[metodo]}` : ""}${facturada && tipoFactura ? ` · ${TIPO_COMPROBANTE_LABEL[tipoFactura]}` : ""}`,
       )
-      setUltima({ ventaId, total, facturada, cobrada: cobro.ok })
+      setUltima({ ventaId, total: totalReal, facturada, cobrada: cobro.ok })
       setLineas([])
       setAviso(null)
       setClienteId(CONSUMIDOR_FINAL_ID)
