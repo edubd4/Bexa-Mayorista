@@ -98,11 +98,21 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
     tipoFactura === "FACTURA_A" && !normalizarCuit(clienteSel?.documento)
   const puedeFacturar = afipConfigurada && tipoFactura !== null && !faltaCuitParaA
 
+  // Anti-carrera (mismo fix que VentaForm, review 2026-08-19 #4): cada línea
+  // lleva un número de pedido incremental; solo la respuesta del ÚLTIMO pedido
+  // pisa el estado. Re-escanear rápido el mismo producto dispara resoluciones
+  // encadenadas — sin esto, una respuesta vieja podía dejar el precio del
+  // tramo equivocado en el carrito.
+  const reqSeq = useRef(new Map<string, number>())
+
   // ── Resolver precio de una línea (mismo motor que ventas) ────────────────
   const resolverLinea = useCallback(
     async (key: string, productoId: string, cantidad: number, cliente: string) => {
+      const reqId = (reqSeq.current.get(key) ?? 0) + 1
+      reqSeq.current.set(key, reqId)
       setLineas((prev) => prev.map((l) => (l.key === key ? { ...l, resolving: true, error: null } : l)))
       const res = await resolverPrecio({ cliente_id: cliente, producto_id: productoId, cantidad })
+      if (reqSeq.current.get(key) !== reqId) return // llegó tarde: la descarta
       setLineas((prev) => prev.map((l) =>
         l.key === key
           ? { ...l, resolving: false, error: res.ok ? null : res.error, precio: res.ok && res.data ? res.data : null }
@@ -304,7 +314,9 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
                       <span className="font-mono text-app-accent text-xs">{p.id_publico}</span>
                       <span className="ml-2">{p.nombre}</span>
                     </span>
-                    <span className="shrink-0 font-mono text-[11px] text-app-muted">stock {p.stock_actual}</span>
+                    <span className="shrink-0 font-mono text-[11px] text-app-muted">
+                      {p.controla_stock ? `stock ${p.stock_actual}` : "sin control"}
+                    </span>
                   </button>
                 </li>
               ))}
@@ -330,7 +342,9 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
               <TableEmpty colSpan={5}>Carrito vacío — escaneá el primer producto.</TableEmpty>
             ) : (
               lineas.map((l) => {
-                const excedeStock = l.cantidad > l.producto.stock_actual
+                // Sin control de stock (0034) no hay nada que exceder: el RPC
+                // no valida ni descuenta para esos productos.
+                const excedeStock = l.producto.controla_stock && l.cantidad > l.producto.stock_actual
                 return (
                   <TableRow key={l.key}>
                     <TableCell>
