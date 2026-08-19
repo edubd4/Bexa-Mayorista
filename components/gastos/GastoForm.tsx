@@ -2,13 +2,16 @@
 
 import { useState, useTransition } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { MoneyInput } from "@/components/ui/number-input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/toast"
-import { registrarGasto } from "@/app/(dashboard)/gastos/actions"
+import { createCategoriaGasto, registrarGasto } from "@/app/(dashboard)/gastos/actions"
 import { DOMINIO } from "@/lib/dominio"
 import { METODO_PAGO, type GastoInput, type MetodoPago } from "@/lib/validators/caja"
 import { METODO_PAGO_LABEL } from "@/lib/caja-ui"
@@ -21,6 +24,9 @@ type Props = {
   // Imputar el gasto a una campaña (0028): es lo que le da costo real al ROI.
   // Opcional — la mayoría de los gastos del negocio no son de publicidad.
   campanas?: Campana[]
+  // Crear categoría inline (0035) es admin-only: createCategoriaGasto tiene
+  // requireAdmin. A marketing no se le muestra el botón — no le va a andar.
+  puedeCrearCategoria?: boolean
 }
 
 function hoyISO(): string {
@@ -31,9 +37,16 @@ function hoyISO(): string {
   return `${yyyy}-${mm}-${dd}`
 }
 
-export function GastoForm({ categorias, campanas = [] }: Props) {
+export function GastoForm({ categorias, campanas = [], puedeCrearCategoria = false }: Props) {
   const toast = useToast()
+  const router = useRouter()
   const [categoriaId, setCategoriaId] = useState<number | "">(categorias[0]?.id ?? "")
+  // Alta inline de categoría (0035): las creadas en esta sesión del form se
+  // suman a las que vinieron del server, y la nueva queda seleccionada.
+  const [categoriasExtra, setCategoriasExtra] = useState<Categoria[]>([])
+  const [creandoCategoria, setCreandoCategoria] = useState(false)
+  const [nombreCategoria, setNombreCategoria] = useState("")
+  const todasLasCategorias = [...categorias, ...categoriasExtra]
   const [monto, setMonto] = useState<number | null>(null)
   const [descripcion, setDescripcion] = useState("")
   const [fecha, setFecha] = useState(hoyISO())
@@ -68,7 +81,25 @@ export function GastoForm({ categorias, campanas = [] }: Props) {
     })
   }
 
-  if (categorias.length === 0) {
+  function crearCategoria() {
+    const nombre = nombreCategoria.trim()
+    if (!nombre) return
+    startTransition(async () => {
+      const res = await createCategoriaGasto({ nombre, descripcion: undefined })
+      if (!res.ok) {
+        toast.error(res.error)
+        return
+      }
+      setCategoriasExtra((prev) => [...prev, { id: res.id, nombre, descripcion: null }])
+      setCategoriaId(res.id)
+      setCreandoCategoria(false)
+      setNombreCategoria("")
+      toast.success(`Categoría "${nombre}" creada y seleccionada`)
+      router.refresh()
+    })
+  }
+
+  if (todasLasCategorias.length === 0 && !puedeCrearCategoria) {
     return (
       <div className="rounded-xl border border-app-amber/40 bg-app-amber/10 px-5 py-4">
         <p className="font-display font-semibold text-app-amber">Falta configurar categorías</p>
@@ -87,17 +118,56 @@ export function GastoForm({ categorias, campanas = [] }: Props) {
     <form onSubmit={handleSubmit} className="rounded-xl border border-app-line-soft bg-app-card p-6 space-y-5">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="categoria">Categoría *</Label>
-          <Select
-            id="categoria"
-            value={String(categoriaId)}
-            onChange={(e) => setCategoriaId(e.target.value ? Number(e.target.value) : "")}
-          >
-            <option value="">— Elegí categoría —</option>
-            {categorias.map((c) => (
-              <option key={c.id} value={c.id}>{c.nombre}</option>
-            ))}
-          </Select>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="categoria">Categoría *</Label>
+            {puedeCrearCategoria && !creandoCategoria && (
+              <button
+                type="button"
+                onClick={() => setCreandoCategoria(true)}
+                className="inline-flex items-center gap-1 text-[11px] font-mono text-app-accent hover:underline"
+              >
+                <Plus className="w-3 h-3" />
+                Nueva categoría
+              </button>
+            )}
+          </div>
+          {creandoCategoria ? (
+            <div className="flex gap-2">
+              <Input
+                value={nombreCategoria}
+                onChange={(e) => setNombreCategoria(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); crearCategoria() }
+                  if (e.key === "Escape") { setCreandoCategoria(false); setNombreCategoria("") }
+                }}
+                placeholder="Nombre de la categoría nueva"
+                autoFocus
+              />
+              <Button type="button" size="sm" onClick={crearCategoria} disabled={isPending}>
+                {isPending ? "Creando…" : "Crear"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => { setCreandoCategoria(false); setNombreCategoria("") }}
+                disabled={isPending}
+              >
+                Cancelar
+              </Button>
+            </div>
+          ) : (
+            <Select
+              id="categoria"
+              value={String(categoriaId)}
+              onChange={(e) => setCategoriaId(e.target.value ? Number(e.target.value) : "")}
+            >
+              <option value="">— Elegí categoría —</option>
+              {todasLasCategorias.map((c) => (
+                <option key={c.id} value={c.id}>{c.nombre}</option>
+              ))}
+            </Select>
+          )}
         </div>
         <div className="space-y-2">
           <Label htmlFor="monto">Monto *</Label>

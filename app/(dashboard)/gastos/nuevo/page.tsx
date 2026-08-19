@@ -63,6 +63,9 @@ export default async function NuevoGastoPage() {
         <GastoForm
           categorias={(categorias ?? []) as { id: number; nombre: string; descripcion: string | null }[]}
           campanas={(campanas ?? []) as { id: string; id_publico: string; nombre: string }[]}
+          // Esta página ya rebotó a todo el que no es admin (arriba), y crear
+          // categorías es admin-only: acá siempre se puede.
+          puedeCrearCategoria
         />
       </div>
     </div>

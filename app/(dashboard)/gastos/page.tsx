@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { Plus } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { AnularGastoButton } from "@/components/gastos/AnularGastoButton"
+import { GastosFijosManager, type GastoFijoEstado } from "@/components/gastos/GastosFijosManager"
 import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -47,13 +48,29 @@ export default async function GastosPage() {
   logPerfilError("GastosPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
-  const { data } = await supabase
-    .from("gastos")
-    .select("id, id_publico, monto, descripcion, fecha, metodo_pago, anulado_at, categoria:categoria_id ( nombre )")
-    .order("fecha", { ascending: false })
-    .limit(200)
+  const [{ data }, { data: fijosData }, { data: categoriasData }] = await Promise.all([
+    supabase
+      .from("gastos")
+      .select("id, id_publico, monto, descripcion, fecha, metodo_pago, anulado_at, categoria:categoria_id ( nombre )")
+      .order("fecha", { ascending: false })
+      .limit(200),
+    // Fijos con su estado del período (0035): pagado_periodo sale de los gastos
+    // reales linkeados por gasto_fijo_id — no hay flag que desincronizar.
+    supabase
+      .from("v_gastos_fijos_estado")
+      .select("*")
+      .order("activo", { ascending: false })
+      .order("dia_pago", { ascending: true, nullsFirst: false }),
+    supabase
+      .from("categorias_gasto")
+      .select("id, nombre")
+      .eq("activo", true)
+      .order("nombre"),
+  ])
 
   const rows = (data ?? []) as unknown as GastoRow[]
+  const fijos = (fijosData ?? []) as unknown as GastoFijoEstado[]
+  const categorias = (categoriasData ?? []) as { id: number; nombre: string }[]
   // Los anulados se muestran (tachados) pero no suman: su plata ya volvió a caja.
   const total = rows.reduce((sum, g) => (g.anulado_at ? sum : sum + Number(g.monto)), 0)
   const ent = DOMINIO.gastos
@@ -87,6 +104,9 @@ export default async function GastosPage() {
           ojo="Para comprar mercadería NO uses Gastos: usá Compras, que además te sube el stock. Gastos es para lo que no entra al depósito."
           seccion="caja-y-gastos"
         />
+
+        {/* Gastos fijos (0035): recordatorio + un click. La plata sale solo al Registrar. */}
+        <GastosFijosManager fijos={fijos} categorias={categorias} />
 
         <div className="rounded-xl border border-app-line-soft bg-app-card overflow-hidden">
           <Table>

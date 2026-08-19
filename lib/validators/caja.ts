@@ -86,8 +86,42 @@ export const gastoSchema = z.object({
   // los gastos no son de publicidad. OBLIGATORIO para marketing — el RPC lo
   // rechaza sin campaña. Es lo que hace que el ROI tenga con qué calcular.
   campana_id:   z.preprocess(emptyToUndef, zUuid().optional()),
+  // Gasto fijo que origina este pago (0035). Lo manda solo el botón
+  // "Registrar" del panel de fijos; el RPC valida que exista y esté activo.
+  gasto_fijo_id: z.preprocess(numeroPreprocess, z.number().int().positive().optional()),
 })
 export type GastoInput = z.infer<typeof gastoSchema>
+
+// ─── Gasto fijo (0035) — plantilla recordatorio, admin-only ─────────────────
+export const PERIODICIDAD_GASTO_FIJO = {
+  SEMANAL: "SEMANAL",
+  MENSUAL: "MENSUAL",
+  ANUAL:   "ANUAL",
+} as const
+export type PeriodicidadGastoFijo =
+  typeof PERIODICIDAD_GASTO_FIJO[keyof typeof PERIODICIDAD_GASTO_FIJO]
+
+export const gastoFijoSchema = z.object({
+  nombre:         z.string().trim().min(1, "El nombre es obligatorio").max(120),
+  categoria_id:   z.preprocess(numeroPreprocess, z.number().int().positive("Elegí una categoría")),
+  monto_estimado: z.preprocess(numeroPreprocess, z.number().positive("Monto estimado debe ser > 0")),
+  metodo_pago:    z.enum([
+    METODO_PAGO.EFECTIVO,       METODO_PAGO.TRANSFERENCIA,
+    METODO_PAGO.TARJETA_DEBITO, METODO_PAGO.TARJETA_CREDITO,
+    METODO_PAGO.MERCADO_PAGO,   METODO_PAGO.CHEQUE, METODO_PAGO.OTRO,
+  ]).default(METODO_PAGO.EFECTIVO),
+  periodicidad:   z.enum([
+    PERIODICIDAD_GASTO_FIJO.SEMANAL,
+    PERIODICIDAD_GASTO_FIJO.MENSUAL,
+    PERIODICIDAD_GASTO_FIJO.ANUAL,
+  ]).default(PERIODICIDAD_GASTO_FIJO.MENSUAL),
+  // Día del mes (MENSUAL/ANUAL, 1-31) o de la semana (SEMANAL, 1=lunes..7).
+  dia_pago:       z.preprocess(numeroPreprocess, z.number().int().min(1).max(31).optional()),
+  // Solo ANUAL: mes en que cae (1-12).
+  mes_pago:       z.preprocess(numeroPreprocess, z.number().int().min(1).max(12).optional()),
+  notas:          z.preprocess(emptyToUndef, z.string().trim().max(1000).optional()),
+})
+export type GastoFijoInput = z.infer<typeof gastoFijoSchema>
 
 // ─── Anular gasto (0023) ────────────────────────────────────────────────────
 // El motivo es obligatorio: la anulación genera un INGRESO AJUSTE en caja y
