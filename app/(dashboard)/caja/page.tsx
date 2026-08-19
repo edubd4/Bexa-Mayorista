@@ -83,7 +83,13 @@ export default async function CajaPage({
         query = query.eq("origen", searchParams.origen)
       }
       if (q.length >= 2) {
-        query = query.or(`id_publico.ilike.%${q}%,descripcion.ilike.%${q}%`)
+        // Comas y paréntesis son sintaxis del parser de .or() de PostgREST:
+        // interpolarlos crudos rompía la query y la caja se mostraba VACÍA en
+        // silencio (review #6). Se reemplazan por espacio antes de interpolar.
+        const qSafe = q.replace(/[,()]/g, " ").replace(/\s+/g, " ").trim()
+        if (qSafe.length >= 2) {
+          query = query.or(`id_publico.ilike.%${qSafe}%,descripcion.ilike.%${qSafe}%`)
+        }
       }
       return query
     })(),

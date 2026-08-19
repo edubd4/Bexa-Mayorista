@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { FileCheck2, Plus, Trash2 } from "lucide-react"
@@ -136,10 +136,18 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
     [productosOrdenados],
   )
 
+  // Anti-carrera (review 2026-08-19 #4): cada línea lleva un número de pedido
+  // incremental; una respuesta solo pisa el estado si sigue siendo la ÚLTIMA
+  // pedida para esa línea. Sin esto, tipear rápido cantidad "1"→"12" podía
+  // dejar en pantalla el precio del tramo de 1 con el total equivocado.
+  const reqSeq = useRef(new Map<string, number>())
+
   // Resolver precio via server action y actualizar la línea.
   const resolverLinea = useCallback(
     async (key: string, prodId: string, cantidad: number) => {
       if (!clienteId || !prodId || cantidad <= 0) return
+      const reqId = (reqSeq.current.get(key) ?? 0) + 1
+      reqSeq.current.set(key, reqId)
       setLineas((prev) =>
         prev.map((l) => (l.key === key ? { ...l, resolving: true, error: null } : l)),
       )
@@ -148,6 +156,9 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
         producto_id: prodId,
         cantidad,
       })
+      // Llegó tarde: ya salió una resolución más nueva para esta línea — la
+      // respuesta vieja se descarta y el estado lo pisa solo la última.
+      if (reqSeq.current.get(key) !== reqId) return
       setLineas((prev) =>
         prev.map((l) =>
           l.key === key
