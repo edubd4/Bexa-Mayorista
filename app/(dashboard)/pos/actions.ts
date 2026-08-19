@@ -15,9 +15,12 @@ export type ProductoPos = {
   sku: string | null
   nombre: string
   stock_actual: number
+  // false = sin control de stock (0034): el mostrador no muestra stock ni
+  // advierte excedido — la venta no valida ni descuenta.
+  controla_stock: boolean
 }
 
-const COLS = "id, id_publico, sku, nombre, stock_actual"
+const COLS = "id, id_publico, sku, nombre, stock_actual, controla_stock"
 
 const codigoSchema = z.string().trim().min(1).max(60)
 
