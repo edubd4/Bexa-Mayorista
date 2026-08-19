@@ -32,7 +32,7 @@ export default async function NuevaVentaPage() {
       .limit(500),
     supabase
       .from("productos_catalogo")
-      .select("id, id_publico, nombre, precio_base, stock_actual, activo")
+      .select("id, id_publico, nombre, precio_base, stock_actual, controla_stock, activo")
       .eq("activo", true)
       .order("nombre")
       .limit(500),
