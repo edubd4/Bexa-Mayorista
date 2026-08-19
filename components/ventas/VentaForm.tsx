@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { FileCheck2, Plus, Trash2 } from "lucide-react"
+import { FileCheck2, Plus, Trash2, Wallet } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SearchSelect, type SearchSelectOption } from "@/components/ui/search-select"
 import { Label } from "@/components/ui/label"
@@ -21,8 +21,10 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { emitirFactura, registrarVenta, resolverPrecio } from "@/app/(dashboard)/ventas/actions"
+import { cobrarVenta } from "@/app/(dashboard)/caja/actions"
 import { DOMINIO } from "@/lib/dominio"
 import { CONDICION_IVA_LABEL, TIPO_COMPROBANTE_LABEL } from "@/lib/facturacion-ui"
+import { METODO_PAGO_LABEL } from "@/lib/caja-ui"
 import { formatPesos } from "@/lib/utils"
 import { explicarOrigenPrecio } from "@/lib/ventas-ui"
 import {
@@ -30,6 +32,7 @@ import {
   tipoComprobantePara,
   type CondicionIva,
 } from "@/lib/validators/facturacion"
+import { METODO_PAGO, type MetodoPago } from "@/lib/validators/caja"
 import {
   ESTADO_ENTREGA,
   type PrecioResuelto,
@@ -103,6 +106,12 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
   const [campanaId, setCampanaId] = useState<string>("")
   const [lineas, setLineas] = useState<LineaBorrador[]>([])
   const [facturarAlRegistrar, setFacturarAlRegistrar] = useState(true)
+  // Cobro en el acto (pedido del cliente 2026-08-19). DESMARCADO por defecto:
+  // en mayorista la venta a cuenta es lo habitual y el cobro llega despues.
+  // Marcarlo encadena cobrar_venta con el total de la venta — mismo circuito
+  // que el boton Cobrar de la ficha y que el mostrador.
+  const [cobrarAhora, setCobrarAhora] = useState(false)
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>(METODO_PAGO.EFECTIVO)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -261,17 +270,38 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
       }
       const ventaId = res.data!.venta_id
 
+      // Cobro en el acto: mismo orden que el mostrador (registrar → cobrar →
+      // facturar). Si el cobro falla, la venta YA quedó registrada — se avisa
+      // y se cobra desde la ficha; nunca se pierde la venta por esto.
+      // El monto va redondeado a 2 decimales: sumar precio*cantidad en floats
+      // puede dar 59.970000000000006 y cobrar_venta lo rechaza por "excede el
+      // saldo" contra el numeric exacto de la venta.
+      let cobroFallo: string | null = null
+      if (cobrarAhora) {
+        const cobro = await cobrarVenta({
+          venta_id: ventaId,
+          monto:    Math.round(totales.total * 100) / 100,
+          metodo:   metodoPago,
+        })
+        if (!cobro.ok) cobroFallo = cobro.error
+      }
+
       // Mejora premium #1: factura en el mismo acto. Si ARCA falla, la venta
       // YA quedó (stock/caja/comisión) — se avisa y se emite después desde la ficha.
       if (puedeFacturarAca && facturarAlRegistrar && tipoFactura) {
         const fact = await emitirFactura({ venta_id: ventaId })
         if (fact.ok) {
-          toast.success(`Venta registrada · ${TIPO_COMPROBANTE_LABEL[tipoFactura]} emitida con CAE`)
+          toast.success(`Venta registrada${sufijoCobro(cobrarAhora, cobroFallo, metodoPago)} · ${TIPO_COMPROBANTE_LABEL[tipoFactura]} emitida con CAE`)
         } else {
           toast.error(`Venta registrada, pero la factura no salió: ${fact.error} — podés emitirla desde la ficha.`)
         }
       } else {
-        toast.success("Venta registrada")
+        toast.success(`Venta registrada${sufijoCobro(cobrarAhora, cobroFallo, metodoPago)}`)
+      }
+      // El cobro fallido se avisa aparte y con el motivo: es plata, no puede
+      // quedar tapado por el mensaje de la factura.
+      if (cobroFallo) {
+        toast.error(`El cobro no se registró: ${cobroFallo} — cobrala desde la ficha.`)
       }
 
       router.push(`${DOMINIO.ventas.ruta}/${ventaId}`)
@@ -457,6 +487,43 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
           <Total label="Descuento" value={`-${formatPesos(totales.descuento)}`} tone="amber" />
           <Total label="Total"     value={formatPesos(totales.total)}     tone="accent" big />
         </div>
+
+        {/* Cobro en el acto (2026-08-19). Si no se marca, la venta nace
+            PENDIENTE y se cobra despues desde la ficha — el circuito de
+            siempre para la venta a cuenta. */}
+        <div className="pt-3 border-t border-app-line-soft flex flex-col sm:flex-row sm:items-center gap-3">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-app-accent"
+              checked={cobrarAhora}
+              disabled={isPending}
+              onChange={(e) => setCobrarAhora(e.target.checked)}
+            />
+            <Wallet className="w-4 h-4" />
+            Cobrar ahora ({formatPesos(totales.total)})
+          </label>
+          {cobrarAhora && (
+            <div className="sm:w-56">
+              <Select
+                id="metodo-pago"
+                aria-label="Método de pago"
+                value={metodoPago}
+                disabled={isPending}
+                onChange={(e) => setMetodoPago(e.target.value as MetodoPago)}
+              >
+                {(Object.keys(METODO_PAGO) as MetodoPago[]).map((m) => (
+                  <option key={m} value={m}>{METODO_PAGO_LABEL[m]}</option>
+                ))}
+              </Select>
+            </div>
+          )}
+          <p className="text-[11px] text-app-muted font-mono sm:ml-auto">
+            {cobrarAhora
+              ? "El cobro entra a la caja al registrar."
+              : "Sin marcar: la venta queda pendiente y la cobrás cuando te paguen."}
+          </p>
+        </div>
       </section>
 
       {/* Notas */}
@@ -512,6 +579,12 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
       </div>
     </form>
   )
+}
+
+// Sufijo del toast segun como salio el cobro encadenado.
+function sufijoCobro(cobrarAhora: boolean, fallo: string | null, metodo: MetodoPago): string {
+  if (!cobrarAhora || fallo) return ""
+  return ` y cobrada · ${METODO_PAGO_LABEL[metodo]}`
 }
 
 function Total({
