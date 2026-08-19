@@ -36,6 +36,13 @@ export default async function FinanzasPage() {
       .limit(50),
   ])
 
+  // Un error acá NO puede ser mudo: la 0036+invoker dejó esta query muriendo
+  // con permission denied y la pantalla mostró "ganancia $0" como si fuera un
+  // dato real (gotcha 2026-08-19, fix en 0039). Al log, siempre.
+  if (saldoRes.error) console.error("[Finanzas] saldo_caja:", saldoRes.error.message)
+  if (porCobrarRes.error) console.error("[Finanzas] v_ventas_con_saldo:", porCobrarRes.error.message)
+  if (gananciaRes.error) console.error("[Finanzas] v_ventas_ganancia:", gananciaRes.error.message)
+
   const saldo = Number(saldoRes.data?.saldo ?? 0)
   const totalIngresos = Number(saldoRes.data?.total_ingresos ?? 0)
   const totalEgresos = Number(saldoRes.data?.total_egresos ?? 0)
