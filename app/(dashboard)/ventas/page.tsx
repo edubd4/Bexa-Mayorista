@@ -145,9 +145,25 @@ export default async function VentasPage({
       : query.eq("id", "00000000-0000-0000-0000-000000000000")
   }
 
-  const [{ data }, { data: resumenData }] = await Promise.all([
+  const conFechas = !!(desde || hasta)
+  const [{ data }, { data: resumenData }, resumenPeriodoQ] = await Promise.all([
     query,
     supabase.from("v_resumen_facturacion").select("facturada, cantidad, monto_total"),
+    // Con fechas activas, las tarjetas Facturado/Sin facturar se calculan del
+    // PERIODO (antes ignoraban el filtro: filtrabas "hoy" y seguian mostrando
+    // la historia entera sin decirlo — pulido 2026-08-19).
+    (async () => {
+      if (!conFechas) return { data: null }
+      let rq = supabase
+        .from("v_ventas_lista")
+        .select("facturada, total")
+        .neq("estado_cobro", "CANCELADA")
+        .limit(2000)
+      if (!esAdmin) rq = rq.eq("vendedor_id", user.id)
+      if (desde) rq = rq.gte("fecha", tsArgentina(desde))
+      if (hasta) rq = rq.lt("fecha", tsArgentina(diaSiguienteISO(hasta)))
+      return rq
+    })(),
   ])
   const rows = (data ?? []) as unknown as VentaRow[]
 
@@ -174,9 +190,39 @@ export default async function VentasPage({
   const totalFiltrado = vivas.reduce((s, r) => s + Number(r.total), 0)
   const hoyISO = toISODate(ahoraArgentina())
   const resumen = (resumenData ?? []) as ResumenFacturacion[]
-  const facturado = resumen.find((r) => r.facturada)
-  const sinFacturar = resumen.find((r) => !r.facturada)
+  const filasPeriodo = (resumenPeriodoQ.data ?? null) as { facturada: boolean; total: number }[] | null
+  const tarjetaFiscal = (facturada: boolean) => {
+    if (filasPeriodo) {
+      const filas = filasPeriodo.filter((r) => r.facturada === facturada)
+      return { monto: filas.reduce((sum, r) => sum + Number(r.total), 0), cantidad: filas.length }
+    }
+    const r = resumen.find((x) => x.facturada === facturada)
+    return { monto: Number(r?.monto_total ?? 0), cantidad: Number(r?.cantidad ?? 0) }
+  }
+  const cardFacturado = tarjetaFiscal(true)
+  const cardSinFacturar = tarjetaFiscal(false)
+  // La tarjeta dice DE QUE PERIODO habla — "facturado" a secas era ambiguo.
+  const etiquetaPeriodo = !conFechas
+    ? "histórico"
+    : desde && desde === hasta
+      ? (desde === hoyISO ? "hoy" : desde)
+      : `${desde || "inicio"} → ${hasta || "hoy"}`
   const ent = DOMINIO.ventas
+
+  // Links que PRESERVAN los filtros activos (antes clickear una tarjeta te
+  // borraba la fecha y el metodo elegidos). fact undefined = destildar.
+  const urlConFact = (valor?: "SI" | "NO") => {
+    const params = new URLSearchParams()
+    if (q.length >= 2) params.set("q", q)
+    if (searchParams.cobro) params.set("cobro", searchParams.cobro)
+    if (searchParams.entrega) params.set("entrega", searchParams.entrega)
+    if (metodo) params.set("metodo", metodo)
+    if (desde) params.set("desde", desde)
+    if (hasta) params.set("hasta", hasta)
+    if (valor) params.set("fact", valor)
+    const qs = params.toString()
+    return qs ? `${ent.ruta}?${qs}` : ent.ruta
+  }
 
   return (
     <div className="app-circuit min-h-[calc(100vh-4rem)] px-6 md:px-10 py-8">
@@ -209,10 +255,12 @@ export default async function VentasPage({
         />
 
         {/* Circuito fiscal (0033): los dos números que el dueño quiere ver
-            separados. Canceladas excluidas. Cada tarjeta filtra al click. */}
+            separados. Canceladas excluidas. Cada tarjeta filtra al click (y
+            destilda si ya estaba activa); con fechas puestas hablan DEL
+            período, no de la historia — y lo dicen en la etiqueta. */}
         <section className="grid grid-cols-2 gap-3">
           <Link
-            href={`${ent.ruta}?fact=SI`}
+            href={urlConFact(searchParams.fact === "SI" ? undefined : "SI")}
             className={`rounded-xl border p-4 transition-colors ${
               searchParams.fact === "SI"
                 ? "border-app-accent/60 bg-app-accent/10"
@@ -220,17 +268,17 @@ export default async function VentasPage({
             }`}
           >
             <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">
-              Facturado
+              Facturado · {etiquetaPeriodo}
             </p>
             <p className="font-display text-xl md:text-2xl text-app-green mt-1">
-              {formatPesos(Number(facturado?.monto_total ?? 0))}
+              {formatPesos(cardFacturado.monto)}
             </p>
             <p className="text-[11px] font-mono text-app-muted mt-0.5">
-              {Number(facturado?.cantidad ?? 0)} {Number(facturado?.cantidad ?? 0) === 1 ? "venta" : "ventas"} con comprobante
+              {cardFacturado.cantidad} {cardFacturado.cantidad === 1 ? "venta" : "ventas"} con comprobante
             </p>
           </Link>
           <Link
-            href={`${ent.ruta}?fact=NO`}
+            href={urlConFact(searchParams.fact === "NO" ? undefined : "NO")}
             className={`rounded-xl border p-4 transition-colors ${
               searchParams.fact === "NO"
                 ? "border-app-accent/60 bg-app-accent/10"
@@ -238,20 +286,23 @@ export default async function VentasPage({
             }`}
           >
             <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">
-              Sin facturar
+              Sin facturar · {etiquetaPeriodo}
             </p>
             <p className="font-display text-xl md:text-2xl text-app-amber mt-1">
-              {formatPesos(Number(sinFacturar?.monto_total ?? 0))}
+              {formatPesos(cardSinFacturar.monto)}
             </p>
             <p className="text-[11px] font-mono text-app-muted mt-0.5">
-              {Number(sinFacturar?.cantidad ?? 0)} {Number(sinFacturar?.cantidad ?? 0) === 1 ? "venta" : "ventas"} solo registro interno
+              {cardSinFacturar.cantidad} {cardSinFacturar.cantidad === 1 ? "venta" : "ventas"} solo registro interno
             </p>
           </Link>
         </section>
 
-        {/* Filtros */}
-        <form action={ent.ruta} method="get" className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
+        {/* Filtros — en tarjeta y en dos filas con logica (pulido 2026-08-19):
+            arriba QUE ventas busco (texto y estados), abajo CUANDO y COMO se
+            pagaron, con las acciones al final de la fila. */}
+        <form action={ent.ruta} method="get" className="rounded-xl border border-app-line-soft bg-app-card p-4 space-y-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-app-muted" />
             <input
               name="q"
@@ -291,6 +342,8 @@ export default async function VentasPage({
             <option value="SI">Solo facturadas</option>
             <option value="NO">Solo sin facturar</option>
           </select>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
           {/* Método de pago real de los cobros (2026-08-19) */}
           <select
             name="metodo"
@@ -302,7 +355,8 @@ export default async function VentasPage({
               <option key={m} value={m}>{METODO_PAGO_LABEL[m]}</option>
             ))}
           </select>
-          {/* Rango de fechas en días argentinos */}
+          {/* Rango de fechas en días argentinos, leido como una frase */}
+          <span className="text-xs font-mono text-app-muted">del</span>
           <input
             type="date"
             name="desde"
@@ -310,6 +364,7 @@ export default async function VentasPage({
             aria-label="Desde"
             className="h-10 rounded-md bg-app-input border border-app-line px-3 text-sm text-app-text"
           />
+          <span className="text-xs font-mono text-app-muted">al</span>
           <input
             type="date"
             name="hasta"
@@ -317,7 +372,6 @@ export default async function VentasPage({
             aria-label="Hasta"
             className="h-10 rounded-md bg-app-input border border-app-line px-3 text-sm text-app-text"
           />
-          <Button type="submit" variant="outline" size="sm">Filtrar</Button>
           <Link
             href={`${ent.ruta}?desde=${hoyISO}&hasta=${hoyISO}`}
             className={`h-10 inline-flex items-center rounded-md border px-3 text-sm font-mono transition-colors ${
@@ -328,23 +382,32 @@ export default async function VentasPage({
           >
             Hoy
           </Link>
-          {hayFiltros && (
-            <Link href={ent.ruta} className="h-10 inline-flex items-center px-2 text-xs font-mono text-app-muted hover:text-app-accent">
-              limpiar ✕
-            </Link>
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            {hayFiltros && (
+              <Link href={ent.ruta} className="h-10 inline-flex items-center px-2 text-xs font-mono text-app-muted hover:text-app-accent">
+                limpiar ✕
+              </Link>
+            )}
+            <Button type="submit" variant="outline" size="sm">Filtrar</Button>
+          </div>
+          </div>
         </form>
 
         {/* Balance del recorte: lo que suman las ventas visibles con los
             filtros puestos (canceladas afuera). Es la respuesta a "cuánto
             vendí hoy" / "cuánto salió por posnet esta semana". */}
         {hayFiltros && (
-          <p className="text-sm font-mono text-app-secondary">
-            {vivas.length} {vivas.length === 1 ? "venta" : "ventas"} en el recorte ·
-            <span className="text-app-accent font-semibold"> {formatPesos(totalFiltrado)}</span>
-            {metodo && ` · cobradas con ${METODO_PAGO_LABEL[metodo as MetodoPago]}`}
-            {rows.length === 200 && " · (tope de 200 filas — afiná el rango si necesitás exactitud)"}
-          </p>
+          <div className="rounded-xl border border-app-accent/30 bg-app-accent/5 px-4 py-2.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <p className="text-sm text-app-secondary">
+              <span className="font-mono text-app-text font-semibold">{vivas.length}</span>
+              {vivas.length === 1 ? " venta" : " ventas"} en el recorte
+              {metodo && ` · cobradas con ${METODO_PAGO_LABEL[metodo as MetodoPago]}`}
+              {rows.length === 200 && (
+                <span className="text-app-muted"> · tope de 200 filas — afiná el rango si necesitás exactitud</span>
+              )}
+            </p>
+            <p className="font-mono text-lg text-app-accent font-semibold">{formatPesos(totalFiltrado)}</p>
+          </div>
         )}
 
         {/* Tabla */}
