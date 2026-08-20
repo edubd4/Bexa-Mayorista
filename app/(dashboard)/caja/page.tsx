@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { Search, TrendingDown, TrendingUp, Wallet } from "lucide-react"
+import { Download, Search, TrendingDown, TrendingUp, Wallet } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Badge } from "@/components/ui/badge"
@@ -45,6 +45,12 @@ type MovRow = {
   gasto:  { id: string; id_publico: string } | null
 }
 
+function sumarDias(iso: string, n: number): string {
+  const d = new Date(`${iso}T12:00:00`)
+  d.setDate(d.getDate() + n)
+  return toISODate(d)
+}
+
 type PeriodoPreset = "hoy" | "ayer" | "semana" | "mes" | "todo" | "rango"
 
 // Rango [desde, hastaExclusiva) en días argentinos. "todo" = sin filtro.
@@ -58,11 +64,6 @@ function resolverPeriodo(sp: { periodo?: string; desde?: string; hasta?: string 
 } {
   const hoy = toISODate(ahoraArgentina())
   const esISO = (v?: string) => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v)
-  const sumarDias = (iso: string, n: number) => {
-    const d = new Date(`${iso}T12:00:00`)
-    d.setDate(d.getDate() + n)
-    return toISODate(d)
-  }
   switch (sp.periodo) {
     case "todo":
       return { preset: "todo", desde: null, hastaExclusiva: null, label: "Histórico completo" }
@@ -222,6 +223,17 @@ export default async function CajaPage({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {/* El CSV del contador vivia en Contabilidad; la fusion (2026-08-19)
+                lo trae aca, con el periodo elegido. El endpoint espera el
+                "hasta" INCLUSIVO — se resta el dia de la cota exclusiva. */}
+            {periodo.desde && periodo.hastaExclusiva && (
+              <Button asChild variant="outline" size="sm">
+                <a href={`/api/contabilidad/csv?desde=${periodo.desde}&hasta=${sumarDias(periodo.hastaExclusiva, -1)}`}>
+                  <Download className="w-4 h-4" />
+                  CSV del período
+                </a>
+              </Button>
+            )}
             <Button asChild variant="outline" size="sm">
               <Link href={`${DOMINIO.gastos.ruta}/nuevo`}>+ Gasto</Link>
             </Button>

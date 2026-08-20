@@ -89,8 +89,10 @@ export const NAV: NavGroup[] = [
     items: [
       { label: DOMINIO.caja.plural,   href: DOMINIO.caja.ruta,   iconKey: "Wallet",     roles: [ROL.ADMIN] },
       { label: DOMINIO.gastos.plural, href: DOMINIO.gastos.ruta, iconKey: "Receipt",    roles: [ROL.ADMIN] },
-      { label: "Finanzas",            href: "/finanzas",         iconKey: "Landmark",   roles: [ROL.ADMIN] },
-      { label: "Contabilidad",        href: "/contabilidad",     iconKey: "Calculator", roles: [ROL.ADMIN] },
+      // "Deudas y ganancia" es lo que la pantalla MUESTRA (2026-08-19).
+      // Contabilidad se fusiono con Caja: mismo libro, ahora con periodo y CSV
+      // en un solo lugar — /contabilidad quedo como redirect.
+      { label: "Deudas y ganancia",   href: "/finanzas",         iconKey: "Landmark",   roles: [ROL.ADMIN] },
       { label: "Comisiones",          href: "/comisiones",       iconKey: "BarChart3",  roles: [...OPERATIVO] },
     ],
   },

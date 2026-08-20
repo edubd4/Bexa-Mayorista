@@ -22,6 +22,7 @@ import { DOMINIO, nuevoLabel } from "@/lib/dominio"
 import { formatFecha, formatPesos } from "@/lib/utils"
 import { METODO_PAGO_LABEL } from "@/lib/caja-ui"
 import type { MetodoPago } from "@/lib/validators/caja"
+import { ahoraArgentina, diaSiguienteISO, rangoMesActual, toISODate } from "@/lib/fechas"
 import { logPerfilError } from "@/lib/auth-guards"
 
 type GastoRow = {
@@ -35,7 +36,31 @@ type GastoRow = {
   categoria: { nombre: string } | null
 }
 
-export default async function GastosPage() {
+type PeriodoGastos = { preset: "mes" | "todo" | "rango"; desde: string | null; hastaExclusiva: string | null; label: string }
+
+// gastos.fecha es DATE (0009) — se filtra con ISO planos, sin timezone.
+// Default MES ACTUAL: "cuanto gaste este mes" es la pregunta real; el
+// "Total mostrado" de antes sumaba las ultimas 200 filas de toda la vida —
+// un numero sin significado de negocio (analisis 2026-08-19).
+function resolverPeriodoGastos(sp: { periodo?: string; desde?: string; hasta?: string }): PeriodoGastos {
+  const esISO = (v?: string) => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v)
+  if (sp.periodo === "todo") {
+    return { preset: "todo", desde: null, hastaExclusiva: null, label: "Histórico completo" }
+  }
+  if (sp.periodo === "rango") {
+    const desde = esISO(sp.desde) ? sp.desde! : toISODate(ahoraArgentina())
+    const hasta = esISO(sp.hasta) ? sp.hasta! : desde
+    return { preset: "rango", desde, hastaExclusiva: diaSiguienteISO(hasta), label: `${desde} → ${hasta}` }
+  }
+  const r = rangoMesActual()
+  return { preset: "mes", desde: r.desde, hastaExclusiva: r.hasta, label: "Mes actual" }
+}
+
+export default async function GastosPage({
+  searchParams,
+}: {
+  searchParams: { periodo?: string; desde?: string; hasta?: string }
+}) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
@@ -48,12 +73,19 @@ export default async function GastosPage() {
   logPerfilError("GastosPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
-  const [{ data }, { data: fijosData }, { data: categoriasData }] = await Promise.all([
-    supabase
-      .from("gastos")
-      .select("id, id_publico, monto, descripcion, fecha, metodo_pago, anulado_at, categoria:categoria_id ( nombre )")
-      .order("fecha", { ascending: false })
-      .limit(200),
+  const periodo = resolverPeriodoGastos(searchParams)
+
+  const [{ data }, { data: fijosData }, { data: categoriasData }, totalQ] = await Promise.all([
+    (async () => {
+      let q = supabase
+        .from("gastos")
+        .select("id, id_publico, monto, descripcion, fecha, metodo_pago, anulado_at, categoria:categoria_id ( nombre )")
+        .order("fecha", { ascending: false })
+        .limit(200)
+      if (periodo.desde) q = q.gte("fecha", periodo.desde)
+      if (periodo.hastaExclusiva) q = q.lt("fecha", periodo.hastaExclusiva)
+      return q
+    })(),
     // Fijos con su estado del período (0035): pagado_periodo sale de los gastos
     // reales linkeados por gasto_fijo_id — no hay flag que desincronizar.
     supabase
@@ -66,13 +98,28 @@ export default async function GastosPage() {
       .select("id, nombre")
       .eq("activo", true)
       .order("nombre"),
+    // Total REAL del periodo — de una query propia, no de las 200 filas
+    // visibles. Anulados afuera: su plata ya volvio a la caja.
+    (async () => {
+      if (!periodo.desde || !periodo.hastaExclusiva) return { data: null }
+      return supabase
+        .from("gastos")
+        .select("monto, anulado_at")
+        .gte("fecha", periodo.desde)
+        .lt("fecha", periodo.hastaExclusiva)
+        .limit(5000)
+    })(),
   ])
 
   const rows = (data ?? []) as unknown as GastoRow[]
   const fijos = (fijosData ?? []) as unknown as GastoFijoEstado[]
   const categorias = (categoriasData ?? []) as { id: number; nombre: string }[]
-  // Los anulados se muestran (tachados) pero no suman: su plata ya volvió a caja.
-  const total = rows.reduce((sum, g) => (g.anulado_at ? sum : sum + Number(g.monto)), 0)
+  // Total del periodo (query completa). Con "Todo", cae al total de las filas
+  // visibles — el numero exacto de la historia entera no vale una query pesada.
+  const totalesPeriodo = (totalQ.data ?? null) as { monto: number; anulado_at: string | null }[] | null
+  const total = totalesPeriodo
+    ? totalesPeriodo.reduce((sum, g) => (g.anulado_at ? sum : sum + Number(g.monto)), 0)
+    : rows.reduce((sum, g) => (g.anulado_at ? sum : sum + Number(g.monto)), 0)
   const ent = DOMINIO.gastos
 
   return (
@@ -107,6 +154,34 @@ export default async function GastosPage() {
 
         {/* Gastos fijos (0035): recordatorio + un click. La plata sale solo al Registrar. */}
         <GastosFijosManager fijos={fijos} categorias={categorias} />
+
+        {/* Barra de periodo (2026-08-19): mes actual por defecto. */}
+        <div className="flex flex-wrap items-center gap-2">
+          {([["mes", "Mes actual"], ["todo", "Todo"]] as const).map(([valor, etiqueta]) => (
+            <Link
+              key={valor}
+              href={valor === "mes" ? ent.ruta : `${ent.ruta}?periodo=${valor}`}
+              className={`h-9 inline-flex items-center rounded-md border px-3 text-sm font-mono transition-colors ${
+                periodo.preset === valor
+                  ? "border-app-accent/60 bg-app-accent/10 text-app-accent"
+                  : "border-app-line text-app-secondary hover:text-app-accent hover:border-app-accent/40"
+              }`}
+            >
+              {etiqueta}
+            </Link>
+          ))}
+          <form action={ent.ruta} method="get" className="flex items-center gap-2 ml-1">
+            <input type="hidden" name="periodo" value="rango" />
+            <input type="date" name="desde" defaultValue={periodo.preset === "rango" ? periodo.desde ?? "" : ""} aria-label="Desde"
+              className="h-9 rounded-md bg-app-input border border-app-line px-2 text-sm text-app-text" />
+            <input type="date" name="hasta" defaultValue={periodo.preset === "rango" ? searchParams.hasta ?? "" : ""} aria-label="Hasta"
+              className="h-9 rounded-md bg-app-input border border-app-line px-2 text-sm text-app-text" />
+            <Button type="submit" variant="outline" size="sm">Ver rango</Button>
+          </form>
+          <p className="text-sm font-mono text-app-secondary ml-auto">
+            {periodo.label} · <span className="text-app-red font-semibold">-{formatPesos(total)}</span>
+          </p>
+        </div>
 
         <div className="rounded-xl border border-app-line-soft bg-app-card overflow-hidden">
           <Table>
@@ -171,7 +246,8 @@ export default async function GastosPage() {
         </div>
 
         <p className="text-xs font-mono text-app-muted">
-          {rows.length} {rows.length === 1 ? "gasto" : "gastos"} · Total mostrado {formatPesos(total)}
+          {rows.length} {rows.length === 1 ? "gasto" : "gastos"} en la tabla · Total del período {formatPesos(total)}
+          {rows.length === 200 && " · (la tabla muestra hasta 200 — el total igual es del período completo)"}
         </p>
       </div>
     </div>

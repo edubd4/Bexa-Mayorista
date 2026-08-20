@@ -252,21 +252,21 @@ export const SECCIONES: SeccionManual[] = [
             ruta: "/gastos/nuevo",
           },
           {
-            titulo: "2 · Verificá que los cobros del día estén cargados",
+            titulo: "2 · Abrí Caja: el Cierre del día ya está armado",
             detalle:
-              "Entrá a Caja y mirá los movimientos de hoy. Cada cobro que entró tiene que estar. Si un vendedor cobró y no lo registró, la caja no va a cuadrar.",
+              "Caja se abre en HOY con el cierre listo: cuánto se vendió, cuánto entró por cada método de pago (efectivo, posnet, transferencia), cuánto salió y el neto. Verificá que cada cobro del día esté — si un vendedor cobró y no lo registró, acá se nota.",
             ruta: "/caja",
           },
           {
-            titulo: "3 · Cuadrá caja",
+            titulo: "3 · Cuadrá el EFECTIVO contra el cajón",
             detalle:
-              "Contá la plata física y comparala con el saldo del sistema. Si hay diferencia, cargá un movimiento de AJUSTE explicando el motivo. Nunca dejes la diferencia sin registrar.",
+              "Contá la plata física y comparala con \"Efectivo neto (contra el cajón)\" del Cierre — ese es el único número comparable con el cajón, porque el saldo general mezcla todos los métodos. Si hay diferencia, cargá un AJUSTE explicando el motivo. Nunca dejes la diferencia sin registrar.",
             ruta: "/caja/nuevo",
           },
           {
-            titulo: "4 · Revisá Finanzas",
+            titulo: "4 · Revisá Deudas y ganancia",
             detalle:
-              "Mirá cuánto queda por cobrar y qué ventas dejaron más ganancia. Es el chequeo de que el día cerró en verde, no solo en movimiento.",
+              "Mirá cuánto queda por cobrar y qué ventas dejaron más ganancia. Es el chequeo de que el día cerró en verde, no solo en movimiento. Para el CSV del contador, usá \"CSV del período\" en Caja.",
             ruta: "/finanzas",
           },
         ],

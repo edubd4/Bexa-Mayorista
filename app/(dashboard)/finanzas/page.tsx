@@ -1,6 +1,5 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { TrendingUp, TrendingDown, Wallet } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { Badge } from "@/components/ui/badge"
@@ -23,8 +22,7 @@ export default async function FinanzasPage() {
   logPerfilError("FinanzasPage", perfilError)
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
-  const [saldoRes, porCobrarRes, gananciaRes] = await Promise.all([
-    supabase.from("saldo_caja").select("saldo, total_ingresos, total_egresos").maybeSingle(),
+  const [porCobrarRes, gananciaRes] = await Promise.all([
     supabase.from("v_ventas_con_saldo")
       .select("id, id_publico, fecha, total, total_cobrado, saldo, dias_desde_venta, estado_cobro, cliente:cliente_id ( nombre, apellido, razon_social, tipo )")
       .order("saldo", { ascending: false })
@@ -39,13 +37,9 @@ export default async function FinanzasPage() {
   // Un error acá NO puede ser mudo: la 0036+invoker dejó esta query muriendo
   // con permission denied y la pantalla mostró "ganancia $0" como si fuera un
   // dato real (gotcha 2026-08-19, fix en 0039). Al log, siempre.
-  if (saldoRes.error) console.error("[Finanzas] saldo_caja:", saldoRes.error.message)
   if (porCobrarRes.error) console.error("[Finanzas] v_ventas_con_saldo:", porCobrarRes.error.message)
   if (gananciaRes.error) console.error("[Finanzas] v_ventas_ganancia:", gananciaRes.error.message)
 
-  const saldo = Number(saldoRes.data?.saldo ?? 0)
-  const totalIngresos = Number(saldoRes.data?.total_ingresos ?? 0)
-  const totalEgresos = Number(saldoRes.data?.total_egresos ?? 0)
   const porCobrar = (porCobrarRes.data ?? []) as unknown as PorCobrarRow[]
   const ganancias = (gananciaRes.data ?? []) as GananciaRow[]
 
@@ -59,11 +53,12 @@ export default async function FinanzasPage() {
       <div className="max-w-6xl mx-auto space-y-6">
         <header>
           <p className="font-mono text-[11px] text-app-accent tracking-[0.18em] uppercase">
-            Plata · Finanzas
+            Plata · Deudas y ganancia
           </p>
-          <h1 className="font-display text-3xl md:text-4xl font-bold mt-1">Finanzas</h1>
+          <h1 className="font-display text-3xl md:text-4xl font-bold mt-1">Deudas y ganancia</h1>
           <p className="text-app-secondary mt-1">
-            Por cobrar y ganancia real por venta (total − costo snapshot).
+            Quién te debe y cuánto margen real dejó cada venta. El saldo y los
+            movimientos viven en Caja.
           </p>
         </header>
 
@@ -73,11 +68,9 @@ export default async function FinanzasPage() {
           ojo="La ganancia que ves acá depende de que los costos de los productos estén bien cargados. Un producto con costo en cero se muestra como ganancia pura, y es mentira."
         />
 
-        {/* KPIs de tesorería */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KPI icon={<Wallet className="w-4 h-4" />} label="Saldo caja" value={formatPesos(saldo)} tone="accent" />
-          <KPI icon={<TrendingUp className="w-4 h-4" />} label="Ingresos totales" value={formatPesos(totalIngresos)} tone="green" />
-          <KPI icon={<TrendingDown className="w-4 h-4" />} label="Egresos totales" value={formatPesos(totalEgresos)} tone="red" />
+        {/* Un solo KPI propio: la deuda viva. Saldo/ingresos/egresos se
+            mostraban REPETIDOS de Caja (analisis 2026-08-19) — viven alla. */}
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <KPI label="Por cobrar" value={formatPesos(totalPorCobrar)} tone="amber" sub={`${porCobrar.length} venta${porCobrar.length === 1 ? "" : "s"}`} />
         </section>
 
