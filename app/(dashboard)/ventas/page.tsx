@@ -27,6 +27,9 @@ import {
   ESTADO_ENTREGA_VARIANT,
 } from "@/lib/ventas-ui"
 import { formatNumeroComprobante } from "@/lib/facturacion-ui"
+import { METODO_PAGO_LABEL } from "@/lib/caja-ui"
+import type { MetodoPago } from "@/lib/validators/caja"
+import { ahoraArgentina, diaSiguienteISO, toISODate, tsArgentina } from "@/lib/fechas"
 import { nombreVisible, type TipoCliente } from "@/lib/validators/cliente"
 import type { TipoComprobante } from "@/lib/validators/facturacion"
 import type { EstadoCobro, EstadoEntrega } from "@/lib/validators/venta"
@@ -62,7 +65,7 @@ type ResumenFacturacion = {
 export default async function VentasPage({
   searchParams,
 }: {
-  searchParams: { q?: string; cobro?: string; entrega?: string; fact?: string }
+  searchParams: { q?: string; cobro?: string; entrega?: string; fact?: string; metodo?: string; desde?: string; hasta?: string }
 }) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -113,11 +116,63 @@ export default async function VentasPage({
     query = query.ilike("id_publico", `%${q}%`)
   }
 
+  // Filtro por fecha (pedido del cliente 2026-08-19): rango [desde, hasta]
+  // inclusivo en días argentinos, contra la columna timestamptz.
+  const esFechaISO = (v?: string) => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v)
+  const desde = esFechaISO(searchParams.desde) ? searchParams.desde! : ""
+  const hasta = esFechaISO(searchParams.hasta) ? searchParams.hasta! : ""
+  if (desde) query = query.gte("fecha", tsArgentina(desde))
+  if (hasta) query = query.lt("fecha", tsArgentina(diaSiguienteISO(hasta)))
+
+  // Filtro por método de pago: una venta "pagada con X" es una venta con al
+  // menos un cobro por ese método. Se buscan primero los cobros y se acota la
+  // lista a esas ventas. Si no hay ninguna, forzamos lista vacía.
+  const metodo = (searchParams.metodo ?? "") as MetodoPago | ""
+  if (metodo && metodo in METODO_PAGO_LABEL) {
+    let cobrosQ = supabase
+      .from("movimientos_caja")
+      .select("venta_id")
+      .eq("origen", "COBRO_VENTA")
+      .eq("metodo_pago", metodo)
+      .not("venta_id", "is", null)
+      .limit(1000)
+    if (desde) cobrosQ = cobrosQ.gte("fecha", tsArgentina(desde))
+    if (hasta) cobrosQ = cobrosQ.lt("fecha", tsArgentina(diaSiguienteISO(hasta)))
+    const { data: cobros } = await cobrosQ
+    const ids = Array.from(new Set((cobros ?? []).map((c) => c.venta_id as string)))
+    query = ids.length > 0
+      ? query.in("id", ids)
+      : query.eq("id", "00000000-0000-0000-0000-000000000000")
+  }
+
   const [{ data }, { data: resumenData }] = await Promise.all([
     query,
     supabase.from("v_resumen_facturacion").select("facturada, cantidad, monto_total"),
   ])
   const rows = (data ?? []) as unknown as VentaRow[]
+
+  // Métodos de pago de cada venta listada (columna "Pago"): salen de los
+  // cobros reales en caja — una venta puede tener varios (parcial + saldo).
+  const metodosPorVenta = new Map<string, MetodoPago[]>()
+  if (rows.length > 0) {
+    const { data: movs } = await supabase
+      .from("movimientos_caja")
+      .select("venta_id, metodo_pago")
+      .eq("origen", "COBRO_VENTA")
+      .in("venta_id", rows.map((r) => r.id))
+    for (const m of (movs ?? []) as { venta_id: string; metodo_pago: MetodoPago }[]) {
+      const arr = metodosPorVenta.get(m.venta_id) ?? []
+      if (!arr.includes(m.metodo_pago)) arr.push(m.metodo_pago)
+      metodosPorVenta.set(m.venta_id, arr)
+    }
+  }
+
+  // Total de lo que está en pantalla — con filtros activos es el balance del
+  // recorte (ej: "hoy en efectivo"). Canceladas excluidas de la suma.
+  const hayFiltros = !!(desde || hasta || metodo || searchParams.cobro || searchParams.entrega || searchParams.fact || q.length >= 2)
+  const vivas = rows.filter((r) => r.estado_cobro !== "CANCELADA")
+  const totalFiltrado = vivas.reduce((s, r) => s + Number(r.total), 0)
+  const hoyISO = toISODate(ahoraArgentina())
   const resumen = (resumenData ?? []) as ResumenFacturacion[]
   const facturado = resumen.find((r) => r.facturada)
   const sinFacturar = resumen.find((r) => !r.facturada)
@@ -236,8 +291,61 @@ export default async function VentasPage({
             <option value="SI">Solo facturadas</option>
             <option value="NO">Solo sin facturar</option>
           </select>
+          {/* Método de pago real de los cobros (2026-08-19) */}
+          <select
+            name="metodo"
+            defaultValue={metodo}
+            className="h-10 rounded-md bg-app-input border border-app-line px-3 text-sm text-app-text"
+          >
+            <option value="">Todo método de pago</option>
+            {(Object.keys(METODO_PAGO_LABEL) as MetodoPago[]).map((m) => (
+              <option key={m} value={m}>{METODO_PAGO_LABEL[m]}</option>
+            ))}
+          </select>
+          {/* Rango de fechas en días argentinos */}
+          <input
+            type="date"
+            name="desde"
+            defaultValue={desde}
+            aria-label="Desde"
+            className="h-10 rounded-md bg-app-input border border-app-line px-3 text-sm text-app-text"
+          />
+          <input
+            type="date"
+            name="hasta"
+            defaultValue={hasta}
+            aria-label="Hasta"
+            className="h-10 rounded-md bg-app-input border border-app-line px-3 text-sm text-app-text"
+          />
           <Button type="submit" variant="outline" size="sm">Filtrar</Button>
+          <Link
+            href={`${ent.ruta}?desde=${hoyISO}&hasta=${hoyISO}`}
+            className={`h-10 inline-flex items-center rounded-md border px-3 text-sm font-mono transition-colors ${
+              desde === hoyISO && hasta === hoyISO
+                ? "border-app-accent/60 bg-app-accent/10 text-app-accent"
+                : "border-app-line text-app-secondary hover:text-app-accent hover:border-app-accent/40"
+            }`}
+          >
+            Hoy
+          </Link>
+          {hayFiltros && (
+            <Link href={ent.ruta} className="h-10 inline-flex items-center px-2 text-xs font-mono text-app-muted hover:text-app-accent">
+              limpiar ✕
+            </Link>
+          )}
         </form>
+
+        {/* Balance del recorte: lo que suman las ventas visibles con los
+            filtros puestos (canceladas afuera). Es la respuesta a "cuánto
+            vendí hoy" / "cuánto salió por posnet esta semana". */}
+        {hayFiltros && (
+          <p className="text-sm font-mono text-app-secondary">
+            {vivas.length} {vivas.length === 1 ? "venta" : "ventas"} en el recorte ·
+            <span className="text-app-accent font-semibold"> {formatPesos(totalFiltrado)}</span>
+            {metodo && ` · cobradas con ${METODO_PAGO_LABEL[metodo as MetodoPago]}`}
+            {rows.length === 200 && " · (tope de 200 filas — afiná el rango si necesitás exactitud)"}
+          </p>
+        )}
 
         {/* Tabla */}
         <div className="rounded-xl border border-app-line-soft bg-app-card overflow-hidden">
@@ -252,12 +360,13 @@ export default async function VentasPage({
                 <TableHead className="text-right hidden md:table-cell">Saldo</TableHead>
                 <TableHead className="hidden md:table-cell">Entrega</TableHead>
                 <TableHead>Cobro</TableHead>
+                <TableHead className="hidden md:table-cell">Pago</TableHead>
                 <TableHead className="hidden lg:table-cell">Comprobante</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
-                <TableEmpty colSpan={esAdmin ? 9 : 8}>
+                <TableEmpty colSpan={esAdmin ? 10 : 9}>
                   {q.length >= 2 || searchParams.cobro || searchParams.entrega || searchParams.fact
                     ? "Ninguna venta coincide con estos filtros. Probá sacando alguno."
                     : "Todavía no hay ventas registradas. Registrá una con el botón de arriba: se descuenta el stock y se genera la comisión sola."}
@@ -312,6 +421,18 @@ export default async function VentasPage({
                             />
                           )}
                       </div>
+                    </TableCell>
+                    {/* Con qué se pagó (2026-08-19): métodos reales de los
+                        cobros en caja. Varios métodos = cobro parcial + saldo. */}
+                    <TableCell className="hidden md:table-cell text-xs text-app-secondary">
+                      {(() => {
+                        const ms = metodosPorVenta.get(v.id) ?? []
+                        if (ms.length === 0) return <span className="text-app-muted">—</span>
+                        const etiqueta = METODO_PAGO_LABEL[ms[0]]
+                        return ms.length === 1
+                          ? etiqueta
+                          : <span title={ms.map((m) => METODO_PAGO_LABEL[m]).join(" + ")}>{etiqueta} +{ms.length - 1}</span>
+                      })()}
                     </TableCell>
                     {/* Circuito fiscal (0033): letra + número si tiene CAE,
                         "Interna" si quedó solo en el registro del sistema. */}

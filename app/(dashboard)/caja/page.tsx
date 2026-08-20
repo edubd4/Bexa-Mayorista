@@ -28,6 +28,7 @@ import type {
   OrigenMovCaja,
   TipoMovCaja,
 } from "@/lib/validators/caja"
+import { ahoraArgentina, diaSiguienteISO, rangoMesActual, toISODate, tsArgentina } from "@/lib/fechas"
 import { logPerfilError } from "@/lib/auth-guards"
 
 type MovRow = {
@@ -44,10 +45,51 @@ type MovRow = {
   gasto:  { id: string; id_publico: string } | null
 }
 
+type PeriodoPreset = "hoy" | "ayer" | "semana" | "mes" | "todo" | "rango"
+
+// Rango [desde, hastaExclusiva) en días argentinos. "todo" = sin filtro.
+// Default HOY (pedido del cliente 2026-08-19): la caja es el ritual del
+// cierre del día — el histórico completo queda a un click en "Todo".
+function resolverPeriodo(sp: { periodo?: string; desde?: string; hasta?: string }): {
+  preset: PeriodoPreset
+  desde: string | null
+  hastaExclusiva: string | null
+  label: string
+} {
+  const hoy = toISODate(ahoraArgentina())
+  const esISO = (v?: string) => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v)
+  const sumarDias = (iso: string, n: number) => {
+    const d = new Date(`${iso}T12:00:00`)
+    d.setDate(d.getDate() + n)
+    return toISODate(d)
+  }
+  switch (sp.periodo) {
+    case "todo":
+      return { preset: "todo", desde: null, hastaExclusiva: null, label: "Histórico completo" }
+    case "ayer": {
+      const ayer = sumarDias(hoy, -1)
+      return { preset: "ayer", desde: ayer, hastaExclusiva: hoy, label: `Ayer (${ayer})` }
+    }
+    case "semana":
+      return { preset: "semana", desde: sumarDias(hoy, -6), hastaExclusiva: sumarDias(hoy, 1), label: "Últimos 7 días" }
+    case "mes": {
+      const r = rangoMesActual()
+      return { preset: "mes", desde: r.desde, hastaExclusiva: r.hasta, label: "Mes actual" }
+    }
+    case "rango": {
+      const desde = esISO(sp.desde) ? sp.desde! : hoy
+      const hasta = esISO(sp.hasta) ? sp.hasta! : desde
+      return { preset: "rango", desde, hastaExclusiva: diaSiguienteISO(hasta), label: `${desde} → ${hasta}` }
+    }
+    default:
+      return { preset: "hoy", desde: hoy, hastaExclusiva: sumarDias(hoy, 1), label: `Hoy (${hoy})` }
+  }
+}
+
 export default async function CajaPage({
   searchParams,
 }: {
-  searchParams: { tipo?: string; origen?: string; q?: string }
+  searchParams: { tipo?: string; origen?: string; q?: string; periodo?: string; desde?: string; hasta?: string }
 }) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -62,8 +104,9 @@ export default async function CajaPage({
   if (profile?.rol !== ROL.ADMIN || !profile.activo) redirect("/panel")
 
   const q = (searchParams.q ?? "").trim()
+  const periodo = resolverPeriodo(searchParams)
 
-  const [saldoRes, movsQ] = await Promise.all([
+  const [saldoRes, movsQ, cierreQ, ventasQ] = await Promise.all([
     supabase.from("saldo_caja").select("saldo, total_ingresos, total_egresos").maybeSingle(),
     (async () => {
       let query = supabase
@@ -76,6 +119,8 @@ export default async function CajaPage({
         `)
         .order("fecha", { ascending: false })
         .limit(200)
+      if (periodo.desde) query = query.gte("fecha", tsArgentina(periodo.desde))
+      if (periodo.hastaExclusiva) query = query.lt("fecha", tsArgentina(periodo.hastaExclusiva))
       if (searchParams.tipo === "INGRESO" || searchParams.tipo === "EGRESO") {
         query = query.eq("tipo", searchParams.tipo)
       }
@@ -93,6 +138,30 @@ export default async function CajaPage({
       }
       return query
     })(),
+    // Cierre del período: TODOS los movimientos del rango (sin los filtros de
+    // arriba y sin el tope de 200 de la tabla) para que las sumas sean reales.
+    // Con "todo" no se calcula — el cierre es de un período, no de la historia.
+    (async () => {
+      if (!periodo.desde || !periodo.hastaExclusiva) return { data: null }
+      return supabase
+        .from("movimientos_caja")
+        .select("tipo, origen, monto, metodo_pago")
+        .gte("fecha", tsArgentina(periodo.desde))
+        .lt("fecha", tsArgentina(periodo.hastaExclusiva))
+        .limit(5000)
+    })(),
+    // Lo VENDIDO del período (que no es lo cobrado: la venta a cuenta genera
+    // deuda, no caja) + cuánto quedó a cuenta.
+    (async () => {
+      if (!periodo.desde || !periodo.hastaExclusiva) return { data: null }
+      return supabase
+        .from("ventas")
+        .select("total, total_cobrado, estado_cobro")
+        .gte("fecha", tsArgentina(periodo.desde))
+        .lt("fecha", tsArgentina(periodo.hastaExclusiva))
+        .neq("estado_cobro", "CANCELADA")
+        .limit(2000)
+    })(),
   ])
 
   const saldo = Number(saldoRes.data?.saldo ?? 0)
@@ -100,6 +169,42 @@ export default async function CajaPage({
   const totalEgresos = Number(saldoRes.data?.total_egresos ?? 0)
   const rows = (movsQ.data ?? []) as unknown as MovRow[]
   const ent = DOMINIO.caja
+
+  // ── Números del cierre ─────────────────────────────────────────────────────
+  type MovCierre = { tipo: TipoMovCaja; origen: OrigenMovCaja; monto: number; metodo_pago: MetodoPago }
+  const movsCierre = (cierreQ.data ?? []) as MovCierre[]
+  const hayCierre = periodo.preset !== "todo"
+
+  // Cobrado por método (solo COBRO_VENTA — la apertura o un ajuste no son ventas).
+  const cobradoPorMetodo = new Map<MetodoPago, number>()
+  for (const m of movsCierre) {
+    if (m.tipo === "INGRESO" && m.origen === "COBRO_VENTA") {
+      cobradoPorMetodo.set(m.metodo_pago, (cobradoPorMetodo.get(m.metodo_pago) ?? 0) + Number(m.monto))
+    }
+  }
+  const cobradoTotal = Array.from(cobradoPorMetodo.values()).reduce((a, b) => a + b, 0)
+
+  // Efectivo NETO del período: entradas menos salidas en efectivo. Es EL número
+  // comparable contra el cajón — el saldo global mezcla todos los métodos.
+  const efectivoNeto = movsCierre
+    .filter((m) => m.metodo_pago === "EFECTIVO")
+    .reduce((a, m) => a + (m.tipo === "INGRESO" ? Number(m.monto) : -Number(m.monto)), 0)
+
+  // Egresos del período por origen (gastos, pagos a proveedor, ajustes).
+  const egresosPorOrigen = new Map<OrigenMovCaja, number>()
+  for (const m of movsCierre) {
+    if (m.tipo === "EGRESO") {
+      egresosPorOrigen.set(m.origen, (egresosPorOrigen.get(m.origen) ?? 0) + Number(m.monto))
+    }
+  }
+  const ingresosPeriodo = movsCierre.filter((m) => m.tipo === "INGRESO").reduce((a, m) => a + Number(m.monto), 0)
+  const egresosPeriodo  = movsCierre.filter((m) => m.tipo === "EGRESO").reduce((a, m) => a + Number(m.monto), 0)
+  const netoPeriodo = ingresosPeriodo - egresosPeriodo
+
+  type VentaCierre = { total: number; total_cobrado: number; estado_cobro: string }
+  const ventasPeriodo = (ventasQ.data ?? []) as VentaCierre[]
+  const vendidoPeriodo = ventasPeriodo.reduce((a, v) => a + Number(v.total), 0)
+  const quedoACuenta = ventasPeriodo.reduce((a, v) => a + Math.max(0, Number(v.total) - Number(v.total_cobrado)), 0)
 
   return (
     <div className="app-circuit min-h-[calc(100vh-4rem)] px-6 md:px-10 py-8">
@@ -133,15 +238,110 @@ export default async function CajaPage({
           seccion="caja-y-gastos"
         />
 
-        {/* KPIs de caja */}
+        {/* Barra de período (2026-08-19): la caja arranca en HOY — el ritual
+            del cierre. "Todo" muestra el histórico como antes. */}
+        <div className="flex flex-wrap items-center gap-2">
+          {([["hoy", "Hoy"], ["ayer", "Ayer"], ["semana", "7 días"], ["mes", "Mes"], ["todo", "Todo"]] as const).map(([valor, etiqueta]) => (
+            <Link
+              key={valor}
+              href={valor === "hoy" ? ent.ruta : `${ent.ruta}?periodo=${valor}`}
+              className={`h-9 inline-flex items-center rounded-md border px-3 text-sm font-mono transition-colors ${
+                periodo.preset === valor
+                  ? "border-app-accent/60 bg-app-accent/10 text-app-accent"
+                  : "border-app-line text-app-secondary hover:text-app-accent hover:border-app-accent/40"
+              }`}
+            >
+              {etiqueta}
+            </Link>
+          ))}
+          <form action={ent.ruta} method="get" className="flex items-center gap-2 ml-1">
+            <input type="hidden" name="periodo" value="rango" />
+            <input type="date" name="desde" defaultValue={periodo.preset === "rango" ? periodo.desde ?? "" : ""} aria-label="Desde"
+              className="h-9 rounded-md bg-app-input border border-app-line px-2 text-sm text-app-text" />
+            <input type="date" name="hasta" defaultValue={periodo.preset === "rango" ? searchParams.hasta ?? "" : ""} aria-label="Hasta"
+              className="h-9 rounded-md bg-app-input border border-app-line px-2 text-sm text-app-text" />
+            <Button type="submit" variant="outline" size="sm">Ver rango</Button>
+          </form>
+        </div>
+
+        {/* Cierre del período: la respuesta a "como cierro el dia" en una sola
+            pantalla — vendido, entrado por método, salido, y el efectivo que
+            tiene que haber en el cajón. El saldo acumulado va aparte para que
+            nadie compare el cajón contra un número que mezcla métodos. */}
+        {hayCierre && (
+          <section className="rounded-xl border border-app-accent/30 bg-app-card overflow-hidden">
+            <div className="px-5 py-3 border-b border-app-line-soft flex items-center justify-between">
+              <h2 className="font-display font-semibold">Cierre · {periodo.label}</h2>
+              <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">
+                Neto del período {netoPeriodo >= 0 ? "+" : "-"}{formatPesos(Math.abs(netoPeriodo))}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-0 md:divide-x divide-app-line-soft">
+              {/* Columna 1: lo vendido y lo que quedó a cuenta */}
+              <div className="p-5 space-y-2">
+                <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">Ventas</p>
+                <Linea label="Vendido" valor={formatPesos(vendidoPeriodo)} />
+                <Linea label="Cobrado (ventas)" valor={formatPesos(cobradoTotal)} tone="green" />
+                <Linea label="Quedó a cuenta" valor={formatPesos(quedoACuenta)} tone={quedoACuenta > 0 ? "amber" : undefined} />
+              </div>
+              {/* Columna 2: entró, por método — el desglose que faltaba */}
+              <div className="p-5 space-y-2">
+                <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">Entró · por método</p>
+                {cobradoPorMetodo.size === 0 ? (
+                  <p className="text-sm text-app-muted">Sin cobros en el período.</p>
+                ) : (
+                  Array.from(cobradoPorMetodo.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([m, monto]) => (
+                      <Linea key={m} label={METODO_PAGO_LABEL[m]} valor={formatPesos(monto)} tone="green" />
+                    ))
+                )}
+                <div className="pt-2 mt-2 border-t border-app-line-soft">
+                  <Linea
+                    label="Efectivo neto (contra el cajón)"
+                    valor={formatPesos(efectivoNeto)}
+                    tone="accent"
+                    destacada
+                  />
+                </div>
+              </div>
+              {/* Columna 3: salió, por origen */}
+              <div className="p-5 space-y-2">
+                <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">Salió</p>
+                {egresosPorOrigen.size === 0 ? (
+                  <p className="text-sm text-app-muted">Sin egresos en el período.</p>
+                ) : (
+                  Array.from(egresosPorOrigen.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([o, monto]) => (
+                      <Linea key={o} label={ORIGEN_MOV_CAJA_LABEL[o]} valor={`-${formatPesos(monto)}`} tone="red" />
+                    ))
+                )}
+                <div className="pt-2 mt-2 border-t border-app-line-soft">
+                  <Linea label="Total egresos" valor={`-${formatPesos(egresosPeriodo)}`} tone="red" destacada />
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Saldo acumulado de toda la vida — separado del cierre a propósito. */}
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <KPI icon={<Wallet className="w-4 h-4" />} label="Saldo actual" value={formatPesos(saldo)} tone="accent" />
-          <KPI icon={<TrendingUp className="w-4 h-4" />} label="Ingresos" value={formatPesos(totalIngresos)} tone="green" />
-          <KPI icon={<TrendingDown className="w-4 h-4" />} label="Egresos" value={formatPesos(totalEgresos)} tone="red" />
+          <KPI icon={<Wallet className="w-4 h-4" />} label="Saldo acumulado" value={formatPesos(saldo)} tone="accent" />
+          <KPI icon={<TrendingUp className="w-4 h-4" />} label="Ingresos históricos" value={formatPesos(totalIngresos)} tone="green" />
+          <KPI icon={<TrendingDown className="w-4 h-4" />} label="Egresos históricos" value={formatPesos(totalEgresos)} tone="red" />
         </section>
 
         {/* Filtros */}
         <form action={ent.ruta} method="get" className="flex flex-wrap items-center gap-2">
+          {/* Mantener el período elegido al filtrar por tipo/origen/texto */}
+          {periodo.preset !== "hoy" && <input type="hidden" name="periodo" value={periodo.preset} />}
+          {periodo.preset === "rango" && periodo.desde && (
+            <input type="hidden" name="desde" value={periodo.desde} />
+          )}
+          {periodo.preset === "rango" && searchParams.hasta && (
+            <input type="hidden" name="hasta" value={searchParams.hasta} />
+          )}
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-app-muted" />
             <input
@@ -245,6 +445,26 @@ export default async function CajaPage({
           {rows.length} {rows.length === 1 ? "movimiento" : "movimientos"} · Los movimientos son inmutables — para corregir, registrá un AJUSTE.
         </p>
       </div>
+    </div>
+  )
+}
+
+function Linea({ label, valor, tone, destacada }: {
+  label: string
+  valor: string
+  tone?: "green" | "red" | "amber" | "accent"
+  destacada?: boolean
+}) {
+  const toneClass =
+    tone === "green" ? "text-app-green"
+    : tone === "red" ? "text-app-red"
+    : tone === "amber" ? "text-app-amber"
+    : tone === "accent" ? "text-app-accent"
+    : "text-app-text"
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className={`text-sm ${destacada ? "font-semibold text-app-text" : "text-app-secondary"}`}>{label}</span>
+      <span className={`font-mono ${destacada ? "text-base font-semibold" : "text-sm"} ${toneClass}`}>{valor}</span>
     </div>
   )
 }
