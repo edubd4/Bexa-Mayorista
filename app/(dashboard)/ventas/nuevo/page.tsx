@@ -73,6 +73,13 @@ export default async function NuevaVentaPage() {
             Elegí el cliente, agregá productos y el precio se resuelve en vivo. Registrar
             aplica stock, comisión e historial en una sola transacción.
           </p>
+          {/* Regla de cuándo usar cuál (2026-08-19): espejo del aviso del POS. */}
+          <p className="text-[11px] font-mono text-app-muted mt-1.5">
+            ¿Cliente en el mostrador pagando ya, con código de barras?{" "}
+            <Link href="/pos" className="text-app-accent hover:underline">
+              Usá Mostrador — es más rápido
+            </Link>
+          </p>
         </header>
 
         <VentaForm

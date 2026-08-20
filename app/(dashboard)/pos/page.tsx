@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { redirect } from "next/navigation"
 import { createServerClient } from "@/lib/supabase/server"
 import { PosTerminal } from "@/components/pos/PosTerminal"
@@ -57,6 +58,14 @@ export default async function PosPage() {
           <p className="text-app-secondary mt-1 text-sm">
             Escaneá los productos con el lector — el carrito se arma solo. El precio
             respeta la lista del cliente y los descuentos por cantidad, como siempre.
+          </p>
+          {/* Regla de cuándo usar cuál (2026-08-19): las dos pantallas venden;
+              esta cobra en el acto, la otra es para el pedido a cuenta. */}
+          <p className="text-[11px] font-mono text-app-muted mt-1.5">
+            ¿Pedido grande, a cuenta o con entrega después?{" "}
+            <Link href="/ventas/nuevo" className="text-app-accent hover:underline">
+              Usá Nueva venta
+            </Link>
           </p>
         </header>
 

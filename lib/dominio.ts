@@ -120,8 +120,11 @@ export const DOMINIO = {
     genero: "m",
   },
   contabilidad: {
-    singular: "Finanzas",
-    plural: "Finanzas",
+    // Un solo nombre en menu, dominio y pantalla (2026-08-19): antes convivian
+    // "Contabilidad" (menu), "Libro" (H1) y "Finanzas" (aca) — y /finanzas es
+    // OTRA pantalla. El usuario aprende UN nombre.
+    singular: "Contabilidad",
+    plural: "Contabilidad",
     ruta: "/contabilidad",
     icono: "Calculator",
     genero: "f",
