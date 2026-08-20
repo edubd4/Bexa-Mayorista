@@ -49,7 +49,7 @@ export async function GET(req: Request) {
       monto: number
       metodo_pago: MetodoPago
       descripcion: string | null
-      venta: { id: string; comprobantes: { id: string }[] } | null
+      venta: { id: string; comprobantes: { id: string }[] | null } | null
     }
     return [
       mov.id_publico,
@@ -58,7 +58,10 @@ export async function GET(req: Request) {
       ORIGEN_MOV_CAJA_LABEL[mov.origen],
       METODO_PAGO_LABEL[mov.metodo_pago],
       mov.descripcion ?? "",
-      mov.venta ? (mov.venta.comprobantes.length > 0 ? "Sí" : "No") : "",
+      // comprobantes puede venir null en el embed (gotcha 2026-08-19: el
+      // mismo acceso sin guarda tiraba el TypeError digest 86885570 en la
+      // página de Contabilidad). Null = sin comprobante = "No".
+      mov.venta ? ((mov.venta.comprobantes?.length ?? 0) > 0 ? "Sí" : "No") : "",
       formatPesos(Number(mov.monto)),
     ]
   })
