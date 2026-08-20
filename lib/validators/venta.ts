@@ -24,6 +24,13 @@ export type EstadoCobro = typeof ESTADO_COBRO[keyof typeof ESTADO_COBRO]
 export const ventaItemSchema = z.object({
   producto_id: zUuid(),
   cantidad:    z.number().int().positive("Cantidad debe ser > 0"),
+  // Bonificación manual del vendedor (0041): % sobre el precio ya resuelto.
+  // Opcional — el POS y las llamadas viejas no la mandan.
+  descuento_manual_pct: z
+    .number()
+    .min(0, "La bonificación no puede ser negativa")
+    .max(100, "La bonificación no puede superar el 100%")
+    .optional(),
 })
 export type VentaItemInput = z.infer<typeof ventaItemSchema>
 

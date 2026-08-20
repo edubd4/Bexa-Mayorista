@@ -458,7 +458,7 @@ export const SECCIONES: SeccionManual[] = [
     resumen: "El flujo completo de una venta y todo lo que dispara.",
     categoria: "Tutoriales",
     roles: OPERATIVO,
-    minutos: 6,
+    minutos: 8,
     bloques: [
       {
         tipo: "texto",
@@ -470,11 +470,11 @@ export const SECCIONES: SeccionManual[] = [
         tipo: "lista",
         titulo: "Lo que pasa cuando confirmás una venta",
         items: [
-          "Se descuenta el stock de cada producto, al instante.",
+          "Se descuenta el stock de cada producto, al instante (salvo los productos marcados 'sin control de stock': registran la cantidad pero no mueven stock).",
           "Se guarda el costo del producto en ese momento (así la ganancia histórica no cambia si mañana sube el costo).",
-          "Se calcula tu comisión sobre el total de la venta.",
+          "Se calcula tu comisión sobre el precio final de cada línea — con descuentos y bonificaciones ya aplicados.",
           "Queda registrada en el Historial con tu nombre.",
-          "La venta nace PENDIENTE de cobro: todavía NO entró plata a la caja.",
+          "Si usaste 'Cobrar ahora', el cobro entra a la caja en el mismo acto. Si no, la venta nace PENDIENTE de cobro: todavía NO entró plata a la caja.",
         ],
       },
       {
@@ -497,28 +497,45 @@ export const SECCIONES: SeccionManual[] = [
               "Buscá cada producto y poné la cantidad. El precio se calcula solo y se actualiza en vivo mientras cambiás la cantidad — porque los descuentos por volumen dependen de cuánto lleva. No pelees con el precio: si te parece mal, mirá la sección 'Cómo se calcula el precio'.",
           },
           {
-            titulo: "4 · Estado de entrega",
+            titulo: "4 · Bonificá si lo negociaste (opcional)",
+            detalle:
+              "La columna 'Bonif %' es tu descuento manual, POR LÍNEA, encima del precio que calculó el sistema. Si le prometiste un porcentaje sobre toda la compra, usá 'Bonificar toda la venta': pone el mismo % en todas las líneas y después podés retocar una por una. La bonificación queda registrada en la venta — se ve quién bonificó y cuánto — y tu comisión se calcula sobre el precio ya bonificado.",
+          },
+          {
+            titulo: "5 · Estado de entrega",
             detalle:
               "ENTREGADA si el cliente se lleva la mercadería ahora. PEDIDO o EN PREPARACIÓN si queda para entregar después. Cuando la entregues, actualizá el estado directo desde la tabla de Ventas — no hace falta entrar a la venta. Poné la verdad: las entregas atrasadas de más de 7 días saltan como alerta al admin.",
           },
           {
-            titulo: "5 · Campaña (opcional)",
+            titulo: "6 · Campaña (opcional)",
             detalle:
               "Si la venta vino de una campaña puntual, elegila. Así marketing puede medir el retorno real de lo que invirtió.",
           },
           {
-            titulo: "6 · Notas y confirmar",
+            titulo: "7 · ¿Te pagan en el acto? Botón 'Cobrar ahora'",
             detalle:
-              "Cualquier cosa que el que venga después necesite saber. Confirmás y el sistema te lleva al detalle de la venta con su código VTA.",
+              "Abre la ventana de pago: ves el total, elegís el método a un toque (efectivo, transferencia, débito, crédito, Mercado Pago) y confirmás. Se registra la venta Y el cobro juntos — la plata entra a la caja al instante. Si el cliente paga después, no toques este botón: registrá con el botón de abajo y cobrala desde la ficha cuando te paguen.",
+          },
+          {
+            titulo: "8 · Notas y confirmar",
+            detalle:
+              "Cualquier cosa que el que venga después necesite saber. Si la facturación está configurada, abajo tenés 'Emitir factura al registrar' — el sistema ya te dice qué comprobante (A o B) le corresponde al cliente. Confirmás y el sistema te lleva al detalle de la venta con su código VTA.",
           },
         ],
+      },
+      {
+        tipo: "aviso",
+        nivel: "info",
+        titulo: "Descuento y Bonif no son lo mismo",
+        texto:
+          "La columna 'Desc' es el descuento AUTOMÁTICO: lo aplican las reglas por volumen, categoría o campaña que armó el admin, y no se toca a mano. La columna 'Bonif %' es TU descuento manual: lo que negociaste con el cliente en el momento. Se pueden dar juntos: primero el sistema resuelve el precio con sus reglas, y tu bonificación se aplica encima de ese resultado.",
       },
       {
         tipo: "aviso",
         nivel: "ojo",
         titulo: "Si no hay stock suficiente, la venta no entra",
         texto:
-          "El sistema no deja vender lo que no tenés. Si el stock del sistema no coincide con el depósito, avisá al admin para que haga el AJUSTE — no busques la vuelta para forzar la venta.",
+          "El sistema no deja vender lo que no tenés (la excepción son los productos 'sin control de stock', que no validan disponibilidad). Si el stock del sistema no coincide con el depósito, avisá al admin para que haga el AJUSTE — no busques la vuelta para forzar la venta.",
       },
       {
         tipo: "pasos",
@@ -553,6 +570,13 @@ export const SECCIONES: SeccionManual[] = [
         parrafos: [
           "Vender y cobrar son dos cosas distintas y el sistema las trata así. La venta descuenta stock. El cobro mueve la caja. Hasta que no registrás el cobro, esa venta es una promesa, no plata.",
         ],
+      },
+      {
+        tipo: "aviso",
+        nivel: "info",
+        titulo: "Si te pagan en el acto, cobrá en el mismo registro",
+        texto:
+          "No hace falta registrar y después ir a buscar la venta para cobrarla. En 'Nueva venta' tenés el botón 'Cobrar ahora': elegís el método y el sistema registra la venta y el cobro juntos. El Mostrador hace lo mismo con 'Cobrar y cerrar'. Los pasos de abajo son para el otro caso — la venta a cuenta, que se cobra cuando el cliente paga.",
       },
       {
         tipo: "pasos",
@@ -598,6 +622,76 @@ export const SECCIONES: SeccionManual[] = [
         titulo: "Un cobro no se borra",
         texto:
           "Los movimientos de caja son inmutables. Si registraste un cobro equivocado, avisá al admin: se corrige con un movimiento de ajuste que lo compense, con la explicación escrita. Nunca intentes 'arreglarlo' cargando otra venta.",
+      },
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  {
+    slug: "mostrador",
+    titulo: "Mostrador (venta rápida)",
+    resumen: "Escanear, cobrar y cerrar: la venta de mostrador en segundos.",
+    categoria: "Tutoriales",
+    roles: OPERATIVO,
+    minutos: 5,
+    bloques: [
+      {
+        tipo: "texto",
+        parrafos: [
+          "El Mostrador es la caja registradora del sistema: pensado para el cliente que está parado adelante tuyo, pagando ya. Escaneás con el lector de código de barras, el carrito se arma solo, elegís el método de pago y cerrás. Una venta de mostrador tarda menos que escribir esta oración.",
+          "Por dentro hace EXACTAMENTE lo mismo que una venta normal: descuenta stock, guarda el costo, calcula tu comisión y deja todo en el Historial. No es un circuito aparte — es el mismo, más rápido.",
+        ],
+      },
+      {
+        tipo: "pasos",
+        titulo: "El circuito completo",
+        pasos: [
+          {
+            titulo: "1 · Abrí Mostrador",
+            detalle:
+              "El cursor queda esperando en el campo de escaneo. Dejalo ahí: el lector escribe como un teclado, y si el foco está en otro lado el código cae donde no debe.",
+            ruta: "/pos",
+          },
+          {
+            titulo: "2 · Escaneá los productos",
+            detalle:
+              "Cada escaneo agrega el producto al carrito; escanear el mismo producto de nuevo le suma 1 a la cantidad. El precio se resuelve en vivo con la lista del cliente y las reglas de descuento — igual que en una venta normal.",
+          },
+          {
+            titulo: "3 · ¿Sin código de barras? Buscalo",
+            detalle:
+              "El buscador de al lado matchea por nombre o ID. Con el campo vacío, al hacer clic ya te despliega el catálogo. Tocás el producto y entra al carrito.",
+          },
+          {
+            titulo: "4 · Ajustá cantidades si hace falta",
+            detalle:
+              "La cantidad se edita directo en la fila del carrito. Si un producto entró de más, lo sacás con el tachito.",
+          },
+          {
+            titulo: "5 · Cliente",
+            detalle:
+              "Arranca en 'Consumidor Final', que es lo correcto para el mostrador. Si el que compra es un cliente con cuenta (y su lista de precios), elegilo — los precios se recalculan solos.",
+          },
+          {
+            titulo: "6 · Método de pago y 'Cobrar y cerrar'",
+            detalle:
+              "Elegís el método, y si corresponde marcás 'Emitir factura'. 'Cobrar y cerrar' registra la venta, mete el cobro en la caja y deja el carrito listo para el próximo cliente. Arriba te queda el acceso a la venta cerrada y a imprimir la factura.",
+          },
+        ],
+      },
+      {
+        tipo: "aviso",
+        nivel: "info",
+        titulo: "¿Mostrador o Nueva venta?",
+        texto:
+          "Mostrador: cliente presente, paga ya, se lleva la mercadería. Nueva venta: todo lo demás — venta a cuenta, entrega para después, atribución a campaña, notas internas o bonificación manual. Si en el medio de una venta de mostrador el cliente te pide un descuento especial, pasate a Nueva venta: ahí tenés la columna Bonif % y el botón Cobrar ahora, que es el mismo cobro en el acto.",
+      },
+      {
+        tipo: "aviso",
+        nivel: "ojo",
+        titulo: "El Mostrador SIEMPRE cobra en el acto",
+        texto:
+          "No existe la venta de mostrador pendiente de cobro: 'Cobrar y cerrar' registra venta y cobro juntos. Si el cliente se lleva mercadería sin pagar, eso es una venta a cuenta — registrala en Nueva venta, sin tocar 'Cobrar ahora', y cobrala cuando pague.",
       },
     ],
   },
@@ -669,10 +763,10 @@ export const SECCIONES: SeccionManual[] = [
   {
     slug: "precios-y-descuentos",
     titulo: "Cómo se calcula el precio",
-    resumen: "Listas, reglas de descuento y por qué sale ese número.",
+    resumen: "Listas, reglas, bonificaciones y por qué sale ese número.",
     categoria: "Referencia",
     roles: OPERATIVO,
-    minutos: 6,
+    minutos: 7,
     bloques: [
       {
         tipo: "texto",
@@ -719,21 +813,46 @@ export const SECCIONES: SeccionManual[] = [
       },
       {
         tipo: "aviso",
+        nivel: "ojo",
+        titulo: "Excepción: los precios por cantidad pisan todo lo anterior",
+        texto:
+          "Si el producto tiene precios por cantidad (escalones cargados en su ficha) y la cantidad alcanza un escalón, ESE es el precio — no se usa la lista del cliente ni se le aplican reglas de descuento. Un solo beneficio por cantidad, así el precio siempre se puede explicar. El detalle está en 'Cargar productos', sección 'Precios por cantidad'.",
+      },
+      {
+        tipo: "pasos",
+        titulo: "Paso 3 · La bonificación manual del vendedor (opcional)",
+        pasos: [
+          {
+            titulo: "Se aplica ENCIMA del precio ya resuelto",
+            detalle:
+              "Cuando el vendedor negocia un descuento en el momento, lo carga en la columna 'Bonif %' de la venta (o con 'Bonificar toda la venta'). Ese porcentaje remata el precio que salió de los pasos 1 y 2 — no lo reemplaza, lo descuenta encima.",
+          },
+          {
+            titulo: "Queda registrada y baja la comisión",
+            detalle:
+              "La bonificación se guarda línea por línea en la venta: en la ficha se ve separada del descuento automático ('bonif. -X%'). Y la comisión del vendedor se calcula sobre el precio ya bonificado — bonificar de más es regalar margen y comisión.",
+          },
+        ],
+      },
+      {
+        tipo: "aviso",
         nivel: "info",
         titulo: "El precio se recalcula en vivo",
         texto:
-          "Mientras armás la venta, si cambiás la cantidad el precio se vuelve a calcular solo. Es normal que el precio unitario baje al subir la cantidad: se activó una regla por volumen.",
+          "Mientras armás la venta, si cambiás la cantidad el precio se vuelve a calcular solo. Es normal que el precio unitario baje al subir la cantidad: se activó una regla por volumen o un escalón de precio por cantidad.",
       },
       {
         tipo: "lista",
         titulo: "Si el precio no es el que esperabas, chequeá en este orden",
         items: [
+          "¿El producto tiene precios por cantidad y la cantidad alcanza un escalón? Ese escalón pisa la lista y las reglas.",
           "¿El cliente tiene la lista de precios correcta asignada en su ficha?",
           "¿Esa lista tiene cargado ese producto en particular?",
           "¿La cantidad llega al mínimo que pide la regla de descuento?",
           "¿La regla de descuento está activa?",
           "¿La categoría del producto está escrita igual que en la regla de categoría?",
           "Si la regla es de campaña: ¿la campaña está vigente y no pausada?",
+          "¿Alguien cargó una bonificación manual en la columna Bonif %?",
         ],
       },
     ],
@@ -1313,6 +1432,16 @@ export const SECCIONES: SeccionManual[] = [
             pregunta: "El precio que salió no es el que yo esperaba.",
             respuesta:
               "Casi siempre es una de tres: el cliente no tiene asignada la lista que vos creías, la cantidad no llega al mínimo que pide la regla de descuento, o hay una regla más específica pisando a la que esperabas. Mirá la sección 'Cómo se calcula el precio': está la secuencia exacta.",
+          },
+          {
+            pregunta: "El cliente me pide un descuento. ¿Cómo lo cargo?",
+            respuesta:
+              "En la venta, columna 'Bonif %': ponés el porcentaje en la línea que corresponda, o usás 'Bonificar toda la venta' para aplicar el mismo % a todo. Es un descuento manual encima del precio del sistema, queda registrado en la venta y tu comisión se calcula sobre el precio ya bonificado. No toques el precio del producto ni inventes otra vuelta: la bonificación existe justamente para esto.",
+          },
+          {
+            pregunta: "El cliente paga en el momento. ¿Registro y después cobro?",
+            respuesta:
+              "No hace falta: usá el botón 'Cobrar ahora' en la misma pantalla de la venta — elegís el método y se registran venta y cobro juntos. Y si es una venta de mostrador con el cliente adelante, directamente usá Mostrador, que siempre cobra en el acto.",
           },
           {
             pregunta: "Registré un cobro y la caja no lo muestra.",
