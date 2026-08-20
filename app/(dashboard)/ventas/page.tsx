@@ -250,7 +250,7 @@ export default async function VentasPage({
         <AyudaPantalla
           que="Todas las ventas registradas, con su estado de cobro y de entrega. Desde acá registrás una venta nueva y entrás a cobrar las que quedaron pendientes."
           cuando="Cada vez que le vendés algo a alguien, en el momento. Y cuando un cliente viene a pagarte algo que se había llevado con saldo."
-          ojo="Registrar la venta descuenta el stock enseguida, pero NO entra la plata a la caja. La plata entra recién cuando cobrás la venta."
+          ojo="Registrar la venta descuenta el stock enseguida, pero la plata entra a la caja recién cuando la cobrás — en el momento con el botón 'Cobrar ahora' del registro, o después desde la ficha."
           seccion="registrar-venta"
         />
 

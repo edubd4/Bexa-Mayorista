@@ -76,6 +76,8 @@ type ItemRow = {
   cantidad: number
   precio_unitario: number
   descuento_pct: number
+  // Bonificación manual del vendedor (0041) — separada del descuento de reglas.
+  descuento_manual_pct: number
   precio_final_unit: number
   origen_precio: string | null
   // Snapshot de la comisión de esta línea (0018). El % puede diferir entre
@@ -118,7 +120,7 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
   const [{ data: items }, { data: comision }, { data: comprobanteRow }, { data: cfgCuit }] = await Promise.all([
     supabase
       .from("venta_items")
-      .select("id, cantidad, precio_unitario, descuento_pct, precio_final_unit, origen_precio, comision_pct_snapshot, comision_monto, producto:producto_id ( id, id_publico, nombre )")
+      .select("id, cantidad, precio_unitario, descuento_pct, descuento_manual_pct, precio_final_unit, origen_precio, comision_pct_snapshot, comision_monto, producto:producto_id ( id, id_publico, nombre )")
       .eq("venta_id", venta.id)
       .order("id"),
     // Comisión visible para admin siempre, para vendedor solo si es la suya (RLS).
@@ -289,7 +291,7 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
                     <TableCell className="text-right font-mono text-sm">{it.cantidad}</TableCell>
                     <TableCell className="text-right font-mono text-sm">
                       {formatPesos(Number(it.precio_final_unit))}
-                      {Number(it.descuento_pct) > 0 && (
+                      {(Number(it.descuento_pct) > 0 || Number(it.descuento_manual_pct) > 0) && (
                         <p className="text-[10.5px] text-app-muted line-through">
                           {formatPesos(Number(it.precio_unitario))}
                         </p>
@@ -297,6 +299,14 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm">
                       {Number(it.descuento_pct) > 0 ? `-${Number(it.descuento_pct)}%` : "—"}
+                      {/* La bonificación manual (0041) se muestra aparte: una
+                          cosa es la regla automática, otra lo que decidió el
+                          vendedor en el momento. */}
+                      {Number(it.descuento_manual_pct) > 0 && (
+                        <p className="text-[10.5px] text-app-amber">
+                          bonif. -{Number(it.descuento_manual_pct)}%
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm">
                       {formatPesos(Number(it.precio_final_unit) * it.cantidad)}

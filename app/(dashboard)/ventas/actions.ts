@@ -91,6 +91,8 @@ export async function registrarVenta(
     p_items:           parsed.data.items.map((i) => ({
       producto_id: i.producto_id,
       cantidad:    i.cantidad,
+      // Bonificación manual (0041). Siempre explícita: 0 = sin bonificar.
+      descuento_manual_pct: i.descuento_manual_pct ?? 0,
     })),
     p_notas:           parsed.data.notas ?? null,
     p_estado_entrega:  parsed.data.estado_entrega,

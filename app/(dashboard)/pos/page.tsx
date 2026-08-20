@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { createServerClient } from "@/lib/supabase/server"
+import { AyudaPantalla } from "@/components/ui/ayuda-pantalla"
 import { PosTerminal } from "@/components/pos/PosTerminal"
 import { DOMINIO } from "@/lib/dominio"
 import { ROL } from "@/lib/constants"
@@ -68,6 +69,13 @@ export default async function PosPage() {
             </Link>
           </p>
         </header>
+
+        <AyudaPantalla
+          que="La caja registradora del sistema: escaneás con el lector, el carrito se arma solo, elegís el método de pago y 'Cobrar y cerrar' registra la venta y el cobro juntos."
+          cuando="Cliente parado adelante tuyo, pagando ya y llevándose la mercadería. Para pedidos a cuenta, con entrega después o con bonificación manual, usá Nueva venta."
+          ojo="El Mostrador SIEMPRE cobra en el acto — no existe la venta de mostrador pendiente. Si el cliente se lleva algo sin pagar, eso va por Nueva venta."
+          seccion="mostrador"
+        />
 
         <PosTerminal
           clientes={(clientes ?? []) as Parameters<typeof PosTerminal>[0]["clientes"]}
