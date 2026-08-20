@@ -151,10 +151,14 @@ async function PanelAdmin({ nombre }: { nombre: string }) {
           <KPI icon={<TrendingUp className="w-4 h-4" />} label="Vendido mes"   value={formatPesos(kpiMes.facturado)}    sub={`ticket prom. ${formatPesos(kpiMes.ticket_prom)}`} href="/finanzas" tone="green" />
         </section>
 
+        {/* "Cobrado hoy" (2026-08-19): el RPC ya lo devolvia y se descartaba.
+            Es la otra mitad de la pregunta diaria — vendido vs. lo que ENTRO.
+            Linkea a la caja, que abre en el cierre de hoy. El ticket promedio
+            ya se muestra como sub de "Vendido mes" — no se repite aca. */}
         <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <KPICompact label="Cobrado hoy"   value={formatPesos(kpiHoy.cobrado)}     tone="green" href={DOMINIO.caja.ruta} />
           <KPICompact label="Cobrado mes"   value={formatPesos(kpiMes.cobrado)}     tone="green" />
           <KPICompact label="Por cobrar"    value={formatPesos(kpiMes.por_cobrar)}  tone="amber" href="/finanzas" />
-          <KPICompact label="Ticket prom."  value={formatPesos(kpiMes.ticket_prom)} tone="accent" />
         </section>
 
         {/* Cumplimiento de tareas del equipo (movido de /tareas: acá es gestión). */}

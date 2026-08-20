@@ -102,7 +102,7 @@ export default async function ContabilidadPage({
             <p className="font-mono text-[11px] text-app-accent tracking-[0.18em] uppercase">
               Plata · Contabilidad
             </p>
-            <h1 className="font-display text-3xl md:text-4xl font-bold mt-1">Libro</h1>
+            <h1 className="font-display text-3xl md:text-4xl font-bold mt-1">Contabilidad</h1>
             <p className="text-app-secondary mt-1">
               Movimientos de caja del período. Exportable a CSV para Excel/contador.
             </p>
