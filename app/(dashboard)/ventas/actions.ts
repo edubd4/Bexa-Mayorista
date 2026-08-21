@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createServerClient } from "@/lib/supabase/server"
-import { TIPO_EVENTO } from "@/lib/constants"
+import { ROL, TIPO_EVENTO } from "@/lib/constants"
 import { DOMINIO } from "@/lib/dominio"
 import { logHistorial } from "@/lib/historial"
 import {
@@ -18,10 +18,14 @@ import {
 } from "@/lib/validators/venta"
 import {
   emitirFacturaSchema,
+  emitirNotaCreditoSchema,
   normalizarCuit,
+  notaCreditoPara,
   tipoComprobantePara,
   type CondicionIva,
   type EmitirFacturaInput,
+  type EmitirNotaCreditoInput,
+  type TipoComprobante,
 } from "@/lib/validators/facturacion"
 import { TIPO_COMPROBANTE_LABEL, formatNumeroComprobante } from "@/lib/facturacion-ui"
 import { emitirComprobanteAfip } from "@/lib/facturacion/afip"
@@ -216,10 +220,14 @@ export async function emitirFactura(input: EmitirFacturaInput): Promise<ActionRe
     return { ok: false, error: "La venta no tiene total facturable" }
   }
 
+  // 0042: filtrar por factura (asociado NULL) — la venta puede tener también
+  // una NC, y con dos filas el maybeSingle a secas devolvería error en vez de
+  // fila, dejando pasar una SEGUNDA factura.
   const { data: existente } = await supabase
     .from("comprobantes")
     .select("id")
     .eq("venta_id", venta.id)
+    .is("comprobante_asociado_id", null)
     .maybeSingle()
   if (existente) return { ok: false, error: "Esta venta ya tiene un comprobante emitido" }
 
@@ -245,6 +253,7 @@ export async function emitirFactura(input: EmitirFacturaInput): Promise<ActionRe
       .from("comprobantes")
       .select("id")
       .eq("venta_id", venta.id)
+      .is("comprobante_asociado_id", null)
       .maybeSingle()
     if (yaEmitido) return { ok: false, error: "Esta venta ya tiene un comprobante emitido" }
 
@@ -440,6 +449,179 @@ async function emitirYRegistrar(
 
   revalidatePath(`${DOMINIO.ventas.ruta}/${venta.id}`)
   return { ok: true }
+}
+
+// ─── Emitir nota de crédito (RG 4540 — anula fiscalmente la factura) ───────
+// La NC es la ÚNICA vía legal de anular una factura con CAE: misma letra,
+// dentro de los 15 días corridos del hecho, identificando al original
+// (CbtesAsoc). v1 = NC TOTAL: mismos montos que la factura. No toca stock ni
+// caja — eso es cancelar_venta, que la 0042 habilita una vez emitida la NC.
+export async function emitirNotaCredito(input: EmitirNotaCreditoInput): Promise<ActionResult> {
+  const parsed = emitirNotaCreditoSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
+  }
+
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: "No autenticado" }
+
+  // Solo admin: una NC reduce el IVA declarado del negocio. La RLS (0042)
+  // también lo exige, pero el chequeo va ACÁ, ANTES de tocar ARCA — rebotar
+  // recién en el insert dejaría un CAE otorgado sin registro local.
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("rol, activo")
+    .eq("id", user.id)
+    .single()
+  if (profile?.rol !== ROL.ADMIN || !profile.activo) {
+    return { ok: false, error: "Solo el admin puede emitir notas de crédito" }
+  }
+
+  const { data: venta } = await supabase
+    .from("ventas")
+    .select("id, id_publico")
+    .eq("id", parsed.data.venta_id)
+    .maybeSingle<{ id: string; id_publico: string }>()
+  if (!venta) return { ok: false, error: "Venta no encontrada" }
+
+  const { data: factura } = await supabase
+    .from("comprobantes")
+    .select("id, tipo, punto_venta, numero, fecha_emision, cuit_emisor, doc_tipo, doc_nro, condicion_iva_receptor, neto, iva, total")
+    .eq("venta_id", venta.id)
+    .is("comprobante_asociado_id", null)
+    .maybeSingle<{
+      id: string
+      tipo: TipoComprobante
+      punto_venta: number
+      numero: number
+      fecha_emision: string
+      cuit_emisor: string
+      doc_tipo: number
+      doc_nro: string
+      condicion_iva_receptor: CondicionIva
+      neto: number
+      iva: number
+      total: number
+    }>()
+  if (!factura) {
+    return { ok: false, error: "La venta no tiene factura emitida — no hay nada que anular" }
+  }
+
+  const { data: ncExistente } = await supabase
+    .from("comprobantes")
+    .select("id")
+    .eq("comprobante_asociado_id", factura.id)
+    .maybeSingle()
+  if (ncExistente) return { ok: false, error: "Esta factura ya tiene su nota de crédito emitida" }
+
+  // Mismo candado que la factura (0038): la clave es venta_id, así que además
+  // de dos NC simultáneas frena la carrera NC vs cancelar_venta (0040/0042).
+  const candado = await adquirirCandadoEmision(supabase, venta.id, user.id)
+  if (!candado) {
+    return {
+      ok: false,
+      error: "Hay otra emisión en curso para esta venta — esperá unos segundos y refrescá antes de reintentar.",
+    }
+  }
+
+  try {
+    const { data: yaEmitida } = await supabase
+      .from("comprobantes")
+      .select("id")
+      .eq("comprobante_asociado_id", factura.id)
+      .maybeSingle()
+    if (yaEmitida) return { ok: false, error: "Esta factura ya tiene su nota de crédito emitida" }
+
+    const tipoNC = notaCreditoPara(factura.tipo)
+    const neto = Number(factura.neto)
+    const iva = Number(factura.iva)
+    const total = Number(factura.total)
+    // La alícuota se deduce de la PROPIA factura (iva/neto contra las
+    // soportadas) — inmune a que afip_iva_pct cambie entre factura y NC.
+    const ratio = neto > 0 ? (iva / neto) * 100 : 21
+    const ivaPct = [10.5, 21, 27].reduce((a, b) =>
+      Math.abs(b - ratio) < Math.abs(a - ratio) ? b : a,
+    )
+
+    const emision = await emitirComprobanteAfip({
+      cuitEmisor: factura.cuit_emisor,
+      puntoVenta: factura.punto_venta,
+      tipo: tipoNC,
+      docTipo: factura.doc_tipo,
+      docNro: factura.doc_nro,
+      condicionIvaReceptor: factura.condicion_iva_receptor,
+      neto,
+      iva,
+      total,
+      ivaPct,
+      comprobanteAsociado: {
+        tipo: factura.tipo,
+        puntoVenta: factura.punto_venta,
+        numero: Number(factura.numero),
+        fechaEmision: factura.fecha_emision,
+      },
+    })
+    if (!emision.ok) return { ok: false, error: emision.error }
+
+    const numeroFmt = formatNumeroComprobante(factura.punto_venta, emision.numero)
+    const facturaFmt = formatNumeroComprobante(factura.punto_venta, Number(factura.numero))
+
+    const { error: insertError } = await supabase.from("comprobantes").insert({
+      venta_id: venta.id,
+      tipo: tipoNC,
+      punto_venta: factura.punto_venta,
+      numero: emision.numero,
+      cuit_emisor: factura.cuit_emisor,
+      doc_tipo: factura.doc_tipo,
+      doc_nro: factura.doc_nro,
+      condicion_iva_receptor: factura.condicion_iva_receptor,
+      neto,
+      iva,
+      total,
+      cae: emision.cae,
+      cae_vencimiento: emision.caeVencimiento,
+      comprobante_asociado_id: factura.id,
+      motivo: parsed.data.motivo,
+      created_by: user.id,
+    })
+
+    if (insertError) {
+      // El CAE de la NC YA existe en ARCA — mismo protocolo que la factura.
+      await logHistorial(supabase, {
+        tipo: TIPO_EVENTO.ALERTA,
+        descripcion: `⚠ CAE ${emision.cae} otorgado para ${TIPO_COMPROBANTE_LABEL[tipoNC]} ${numeroFmt} (anula ${facturaFmt}, venta ${venta.id_publico}) pero falló el guardado: ${insertError.message}`,
+        entidadTipo: "venta",
+        entidadId: venta.id_publico,
+        payload: { cae: emision.cae, numero: emision.numero, punto_venta: factura.punto_venta, tipo: tipoNC },
+        userId: user.id,
+      })
+      return {
+        ok: false,
+        error: `ARCA autorizó ${TIPO_COMPROBANTE_LABEL[tipoNC]} ${numeroFmt} (CAE ${emision.cae}) pero no se pudo guardar localmente. Quedó asentado en el historial — reconciliar antes de reintentar.`,
+      }
+    }
+
+    await logHistorial(supabase, {
+      tipo: TIPO_EVENTO.ALTA,
+      descripcion: `${TIPO_COMPROBANTE_LABEL[tipoNC]} ${numeroFmt} emitida — anula ${TIPO_COMPROBANTE_LABEL[factura.tipo]} ${facturaFmt} de venta ${venta.id_publico} · CAE ${emision.cae} · ${parsed.data.motivo}`,
+      entidadTipo: "venta",
+      entidadId: venta.id_publico,
+      payload: { tipo: tipoNC, numero: emision.numero, cae: emision.cae, anula: facturaFmt, motivo: parsed.data.motivo },
+      userId: user.id,
+    })
+
+    revalidatePath(DOMINIO.ventas.ruta)
+    revalidatePath(`${DOMINIO.ventas.ruta}/${venta.id}`)
+    return { ok: true }
+  } finally {
+    await supabase
+      .from("comprobantes_en_curso")
+      .delete()
+      .eq("venta_id", venta.id)
+      .eq("created_by", user.id)
+      .eq("iniciado_at", candado)
+  }
 }
 
 // ─── Cancelar venta (revierte stock via RPC) ───────────────────────────────

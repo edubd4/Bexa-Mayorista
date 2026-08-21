@@ -5,22 +5,27 @@ import { PrintButton } from "@/components/ui/print-button"
 import {
   CONDICION_IVA_LABEL,
   CBTE_TIPO_CODIGO,
+  TIPO_COMPROBANTE_LABEL,
   formatNumeroComprobante,
   qrUrlComprobante,
 } from "@/lib/facturacion-ui"
 import { formatFecha, formatPesos } from "@/lib/utils"
 import { nombreVisible, type TipoCliente } from "@/lib/validators/cliente"
-import type { Comprobante } from "@/lib/validators/facturacion"
+import { esNotaCredito, type Comprobante } from "@/lib/validators/facturacion"
 
-// ─── Factura imprimible (RG 1415 + QR RG 4892) ──────────────────────────────
+// ─── Comprobante imprimible (RG 1415 + QR RG 4892) ──────────────────────────
+// Renderiza la FACTURA de la venta, o su NOTA DE CRÉDITO con ?doc=nc (0042).
 // Vive FUERA del shell del dashboard: un documento fiscal se imprime en blanco,
 // sin sidebar ni tema oscuro. La visibilidad la sigue recortando RLS (admin o
-// vendedor dueño de la venta) — sin sesión no hay factura.
+// vendedor dueño de la venta) — sin sesión no hay comprobante.
 //
 // Regla de presentación clave:
 //   Factura A → precios NETOS por ítem + IVA discriminado al pie.
-//   Factura B → precios finales; el IVA va INCLUIDO y NO se discrimina
-//   (mostrarlo discriminado en una B a consumidor final es un error formal).
+//   Factura B → precios finales con IVA incluido; el total NO se desglosa,
+//   pero desde el 01/04/2025 es OBLIGATORIO el bloque informativo "Régimen de
+//   Transparencia Fiscal al Consumidor (Ley 27.743)" con el IVA Contenido y
+//   Otros Impuestos Nacionales Indirectos (RG 5614/2024). Es una leyenda al
+//   pie — los precios y el total siguen mostrándose finales.
 
 type Params = { ventaId: string }
 
@@ -51,12 +56,18 @@ const CLAVES_CONFIG = [
   "afip_iva_pct",
 ] as const
 
-export default async function FacturaPage({ params }: { params: Params }) {
+export default async function FacturaPage({
+  params,
+  searchParams,
+}: {
+  params: Params
+  searchParams?: { doc?: string }
+}) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const [{ data: venta }, { data: comprobante }, { data: config }] = await Promise.all([
+  const [{ data: venta }, { data: comprobantesRows }, { data: config }] = await Promise.all([
     supabase
       .from("ventas")
       .select(`
@@ -65,15 +76,22 @@ export default async function FacturaPage({ params }: { params: Params }) {
       `)
       .eq("id", params.ventaId)
       .maybeSingle<{ id: string; id_publico: string; fecha: string; cliente: ClienteFactura | null }>(),
+    // 0042: la venta puede tener factura + nota de crédito — lista, no single.
     supabase
       .from("comprobantes")
-      .select("id, tipo, punto_venta, numero, fecha_emision, cuit_emisor, doc_tipo, doc_nro, condicion_iva_receptor, neto, iva, total, cae, cae_vencimiento")
+      .select("id, tipo, punto_venta, numero, fecha_emision, cuit_emisor, doc_tipo, doc_nro, condicion_iva_receptor, neto, iva, total, cae, cae_vencimiento, comprobante_asociado_id, motivo")
       .eq("venta_id", params.ventaId)
-      .maybeSingle<Comprobante>(),
+      .order("created_at"),
     supabase.from("configuracion").select("clave, valor").in("clave", [...CLAVES_CONFIG]),
   ])
 
-  // Sin comprobante no hay factura que mostrar — primero se emite en la venta.
+  const comprobantes = (comprobantesRows ?? []) as unknown as Comprobante[]
+  const factura = comprobantes.find((c) => !c.comprobante_asociado_id) ?? null
+  const nc = comprobantes.find((c) => Boolean(c.comprobante_asociado_id)) ?? null
+  // ?doc=nc pide la nota de crédito; sin query se muestra la factura.
+  const comprobante = searchParams?.doc === "nc" ? nc : factura
+
+  // Sin comprobante no hay documento que mostrar — primero se emite en la venta.
   if (!venta || !comprobante) notFound()
 
   const { data: items } = await supabase
@@ -83,11 +101,13 @@ export default async function FacturaPage({ params }: { params: Params }) {
     .order("id")
 
   const cfg = Object.fromEntries((config ?? []).map((c) => [c.clave, c.valor]))
-  const esFacturaA = comprobante.tipo === "FACTURA_A"
-  const letra = esFacturaA ? "A" : "B"
+  const esNC = esNotaCredito(comprobante.tipo)
+  const esClaseA = comprobante.tipo === "FACTURA_A" || comprobante.tipo === "NOTA_CREDITO_A"
+  const letra = esClaseA ? "A" : "B"
+  const tituloDoc = esNC ? "NOTA DE CRÉDITO" : "FACTURA"
   const ivaPct = Number(cfg.afip_iva_pct || "21")
-  // En la A los ítems se muestran a valor neto (los precios del sistema son finales)
-  const factorNeto = esFacturaA ? 1 / (1 + ivaPct / 100) : 1
+  // En clase A los ítems se muestran a valor neto (los precios del sistema son finales)
+  const factorNeto = esClaseA ? 1 / (1 + ivaPct / 100) : 1
 
   const rows = (items ?? []) as unknown as ItemFactura[]
   const qrDataUrl = await QRCode.toDataURL(qrUrlComprobante(comprobante), { margin: 1, width: 132 })
@@ -105,7 +125,7 @@ export default async function FacturaPage({ params }: { params: Params }) {
     <div className="min-h-screen bg-neutral-200 print:bg-white py-8 print:py-0 px-4 text-black">
       <div className="max-w-[210mm] mx-auto space-y-4">
         <div className="flex justify-end print:hidden">
-          <PrintButton label="Imprimir factura" />
+          <PrintButton label={esNC ? "Imprimir nota de crédito" : "Imprimir factura"} />
         </div>
 
         <div className="bg-white shadow print:shadow-none p-8 text-[13px] leading-snug font-sans">
@@ -122,7 +142,7 @@ export default async function FacturaPage({ params }: { params: Params }) {
               <p className="text-[10px] mt-1">COD. {String(CBTE_TIPO_CODIGO[comprobante.tipo]).padStart(2, "0")}</p>
             </div>
             <div className="p-4 text-right">
-              <p className="text-lg font-bold">FACTURA</p>
+              <p className="text-lg font-bold">{tituloDoc}</p>
               <p className="font-mono">Nº {numeroFmt}</p>
               <p className="mt-2">Fecha: {formatFecha(comprobante.fecha_emision)}</p>
               <p className="mt-1">CUIT: {comprobante.cuit_emisor}</p>
@@ -146,6 +166,19 @@ export default async function FacturaPage({ params }: { params: Params }) {
               <p><span className="font-bold">Domicilio: </span>{domicilioReceptor}</p>
             )}
           </div>
+
+          {/* ── Comprobante anulado (RG 4540: la NC identifica al original) ── */}
+          {esNC && factura && (
+            <div className="border border-black border-t-0 px-4 py-2 text-[12px]">
+              <span className="font-bold">Anula: </span>
+              {TIPO_COMPROBANTE_LABEL[factura.tipo]} Nº{" "}
+              {formatNumeroComprobante(factura.punto_venta, Number(factura.numero))} · emitida{" "}
+              {formatFecha(factura.fecha_emision)} · CAE {factura.cae}
+              {comprobante.motivo && (
+                <span className="text-neutral-600"> · Motivo: {comprobante.motivo}</span>
+              )}
+            </div>
+          )}
 
           {/* ── Ítems ── */}
           <table className="w-full mt-4 border-collapse">
@@ -177,7 +210,7 @@ export default async function FacturaPage({ params }: { params: Params }) {
           {/* ── Totales ── */}
           <div className="flex justify-end mt-4">
             <div className="w-64 space-y-1">
-              {esFacturaA ? (
+              {esClaseA ? (
                 <>
                   <div className="flex justify-between">
                     <span>Subtotal neto</span>
@@ -195,6 +228,26 @@ export default async function FacturaPage({ params }: { params: Params }) {
               </div>
             </div>
           </div>
+
+          {/* ── Transparencia Fiscal (Ley 27.743 · RG 5614) — solo clase B ── */}
+          {/* Obligatorio desde 01/04/2025 en comprobantes B a consumidor final
+              y exentos: IVA contenido en el precio + otros impuestos nacionales
+              indirectos (internos; BEXA no comercializa gravados → $ 0,00). */}
+          {!esClaseA && (
+            <div className="mt-6 w-80 border border-black p-3 text-[11px] leading-snug">
+              <p className="font-bold">
+                Régimen de Transparencia Fiscal al Consumidor (Ley 27.743)
+              </p>
+              <div className="mt-1.5 flex justify-between gap-4">
+                <span>IVA Contenido</span>
+                <span className="font-mono">{formatPesos(Number(comprobante.iva))}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span>Otros Impuestos Nacionales Indirectos</span>
+                <span className="font-mono">{formatPesos(0)}</span>
+              </div>
+            </div>
+          )}
 
           {/* ── Pie: CAE + QR ── */}
           <div className="flex items-end justify-between mt-8 pt-4 border-t border-black">

@@ -14,12 +14,16 @@ export const CONDICION_IVA_LABEL: Record<CondicionIva, string> = {
 export const TIPO_COMPROBANTE_LABEL: Record<TipoComprobante, string> = {
   FACTURA_A: "Factura A",
   FACTURA_B: "Factura B",
+  NOTA_CREDITO_A: "Nota de Crédito A",
+  NOTA_CREDITO_B: "Nota de Crédito B",
 }
 
 // Códigos de comprobante ARCA (tabla FEParamGetTiposCbte)
 export const CBTE_TIPO_CODIGO: Record<TipoComprobante, number> = {
   FACTURA_A: 1,
   FACTURA_B: 6,
+  NOTA_CREDITO_A: 3,
+  NOTA_CREDITO_B: 8,
 }
 
 // "0003-00000042" — formato estándar punto de venta + número

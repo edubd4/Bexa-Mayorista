@@ -43,6 +43,14 @@ export type EmisionParams = {
   iva: number
   total: number
   ivaPct: number
+  // Solo notas de crédito/débito (RG 4540): el comprobante que se anula o
+  // ajusta, identificado como lo exige el WS (CbtesAsoc).
+  comprobanteAsociado?: {
+    tipo: TipoComprobante
+    puntoVenta: number
+    numero: number
+    fechaEmision: string  // "yyyy-mm-dd" (fecha_emision de la fila original)
+  }
 }
 
 export type EmisionResult =
@@ -83,6 +91,19 @@ export async function emitirComprobanteAfip(params: EmisionParams): Promise<Emis
 
   const { cbteFch } = fechaComprobanteHoy()
 
+  // RG 4540: la NC/ND identifica al comprobante que ajusta. El WS lo recibe
+  // en CbtesAsoc con la fecha del original en yyyymmdd y el CUIT del emisor
+  // (mismo emisor siempre — una NC ajena no existe).
+  const cbtesAsoc = params.comprobanteAsociado
+    ? [{
+        Tipo: CBTE_TIPO_CODIGO[params.comprobanteAsociado.tipo],
+        PtoVta: params.comprobanteAsociado.puntoVenta,
+        Nro: params.comprobanteAsociado.numero,
+        Cuit: params.cuitEmisor,
+        CbteFch: Number(params.comprobanteAsociado.fechaEmision.replace(/-/g, "")),
+      }]
+    : undefined
+
   try {
     const res = await afip.ElectronicBilling.createNextVoucher({
       CantReg: 1,
@@ -102,6 +123,7 @@ export async function emitirComprobanteAfip(params: EmisionParams): Promise<Emis
       MonCotiz: 1,
       CondicionIVAReceptorId: CONDICION_IVA_RECEPTOR_ID[params.condicionIvaReceptor],
       Iva: [{ Id: alicuotaId, BaseImp: params.neto, Importe: params.iva }],
+      ...(cbtesAsoc ? { CbtesAsoc: cbtesAsoc } : {}),
     })
 
     // CAEFchVto puede venir "yyyy-mm-dd" o "yyyymmdd" según versión del WS.
