@@ -551,6 +551,11 @@ export const SECCIONES: SeccionManual[] = [
             detalle:
               "El admin siempre. El vendedor solo puede cancelar sus propias ventas y únicamente si todavía no se cobró nada. En cuanto entró un peso, la cancelación es del admin.",
           },
+          {
+            titulo: "¿La venta tiene factura emitida? Primero la nota de crédito",
+            detalle:
+              "Una venta con factura autorizada por ARCA no se puede cancelar directo: el sistema te frena y te lo dice. El admin emite primero la nota de crédito (ver la sección 'Facturación electrónica') y recién después la venta se cancela normal.",
+          },
         ],
       },
     ],
@@ -622,6 +627,91 @@ export const SECCIONES: SeccionManual[] = [
         titulo: "Un cobro no se borra",
         texto:
           "Los movimientos de caja son inmutables. Si registraste un cobro equivocado, avisá al admin: se corrige con un movimiento de ajuste que lo compense, con la explicación escrita. Nunca intentes 'arreglarlo' cargando otra venta.",
+      },
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  {
+    slug: "facturacion",
+    titulo: "Facturación electrónica (ARCA)",
+    resumen: "Emitir la factura de una venta, imprimirla y anularla con nota de crédito.",
+    categoria: "Tutoriales",
+    roles: OPERATIVO,
+    minutos: 5,
+    bloques: [
+      {
+        tipo: "texto",
+        parrafos: [
+          "La factura del sistema es una factura electrónica DE VERDAD: cada emisión se autoriza en ARCA en el momento y vuelve con su CAE (el código de autorización) y su código QR de verificación. No es un ticket interno.",
+          "Facturar es opcional por venta: la venta registra stock, cobro y comisión igual, con o sin factura. El circuito facturado / sin facturar se ve separado en la lista de Ventas.",
+        ],
+      },
+      {
+        tipo: "lista",
+        titulo: "Qué comprobante sale — lo decide el cliente, no vos",
+        items: [
+          "El sistema elige la letra según la condición frente al IVA cargada en la ficha del cliente: Responsable Inscripto y Monotributista reciben Factura A; Consumidor Final y Exento reciben Factura B.",
+          "Para Factura A el cliente necesita un CUIT válido en su ficha — sin CUIT el sistema no emite y te avisa.",
+          "La Factura B imprime sola el bloque 'Régimen de Transparencia Fiscal al Consumidor (Ley 27.743)' con el IVA contenido. Es obligatorio por ley — no lo saques ni lo tapes.",
+          "Si el cliente te dice que 'la factura está mal', casi siempre es la condición de IVA de su ficha: corregila ahí ANTES de emitir, no después.",
+        ],
+      },
+      {
+        tipo: "pasos",
+        titulo: "Emitir la factura",
+        pasos: [
+          {
+            titulo: "1 · En el momento o después — las dos valen",
+            detalle:
+              "Al registrar la venta tenés 'Emitir factura al registrar' (también en el Mostrador). Si no la emitiste ahí, entrá al detalle de la venta cuando quieras y usá 'Emitir Factura A/B' — el botón ya te dice qué letra corresponde.",
+          },
+          {
+            titulo: "2 · Confirmá y ARCA autoriza",
+            detalle:
+              "El sistema manda la solicitud y ARCA responde con el CAE. Desde ese momento el comprobante existe fiscalmente y queda guardado en la venta con su número, CAE y vencimiento.",
+          },
+          {
+            titulo: "3 · Imprimila o verificala",
+            detalle:
+              "En el detalle de la venta: 'Ver / imprimir factura' abre el documento listo para imprimir en A4, y 'Verificar en ARCA' abre la página oficial donde cualquiera puede validar el QR.",
+          },
+        ],
+      },
+      {
+        tipo: "aviso",
+        nivel: "cuidado",
+        titulo: "Una factura con CAE no se toca",
+        texto:
+          "No se edita, no se borra, no se 'vuelve a hacer'. Si está mal — precio, cliente, lo que sea — el único camino legal es la nota de crédito, y la emite el admin. Por eso: revisá cliente y total ANTES de confirmar la emisión.",
+      },
+      {
+        tipo: "pasos",
+        titulo: "Anular una factura — nota de crédito (solo admin)",
+        pasos: [
+          {
+            titulo: "1 · Entrá al detalle de la venta facturada",
+            detalle:
+              "Vas a ver el botón 'Emitir nota de crédito' junto al comprobante. Solo lo ve el admin: la nota de crédito baja el IVA declarado del negocio y no es una acción de vendedor.",
+          },
+          {
+            titulo: "2 · Escribí el motivo — es obligatorio",
+            detalle:
+              "Devolución de mercadería, error de carga, lo que haya pasado. Queda impreso la referencia en el comprobante y registrado en el Historial. Ojo con el reloj: la norma da 15 días corridos desde el hecho para emitirla — no la dejes juntar polvo.",
+          },
+          {
+            titulo: "3 · ARCA autoriza la nota — y recién ahí podés cancelar la venta",
+            detalle:
+              "La nota sale con la misma letra que la factura, con su propio CAE, identificando a la factura que anula. La factura queda marcada 'Anulada'. Si además hay que devolver mercadería y plata, ahora sí: 'Cancelar venta' repone el stock y devuelve el cobro por caja.",
+          },
+        ],
+      },
+      {
+        tipo: "aviso",
+        nivel: "info",
+        titulo: "¿ARCA caído? La venta no se frena",
+        texto:
+          "Si ARCA no responde, registrá la venta igual — stock, cobro y comisión no dependen de ARCA. La factura la emitís después desde el detalle, cuando el servicio vuelva.",
       },
     ],
   },
@@ -1481,12 +1571,17 @@ export const SECCIONES: SeccionManual[] = [
           {
             pregunta: "¿Puedo cancelar una venta que ya cobré?",
             respuesta:
-              "Solo el admin. Y ojo: cancelar devuelve el stock pero el cobro ya registrado sigue en la caja — hay que compensarlo con un movimiento de caja aparte. Por eso conviene revisar antes de confirmar una venta.",
+              "Solo el admin. Al cancelar, el sistema repone el stock Y devuelve la plata cobrada con un egreso de caja automático, usando el mismo método del último cobro — no hay que compensar nada a mano. Si la venta además tenía factura emitida, antes va la nota de crédito (la emite el admin).",
           },
           {
             pregunta: "Vendí y ahora el cliente devuelve la mercadería.",
             respuesta:
-              "Si no se cobró nada, cancelá la venta: el stock vuelve solo. Si ya se cobró, avisá al admin: hay que cancelar la venta y además registrar la devolución de la plata como movimiento de caja.",
+              "Si no se cobró nada ni se facturó, cancelá la venta: el stock vuelve solo. Si ya se cobró, la cancela el admin y el sistema devuelve la plata por caja automáticamente. Si además estaba facturada, el orden es: primero la nota de crédito (admin), después cancelar.",
+          },
+          {
+            pregunta: "Facturé una venta con un error. ¿La puedo corregir?",
+            respuesta:
+              "No — una factura autorizada por ARCA no se edita ni se borra, nunca. El admin emite la nota de crédito desde el detalle de la venta (con el motivo), la factura queda anulada, y si hace falta se registra la venta de nuevo y se factura bien. Los detalles están en la sección 'Facturación electrónica'.",
           },
           {
             pregunta: "El sistema no me deja vender por falta de stock.",
