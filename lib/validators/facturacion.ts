@@ -13,6 +13,8 @@ export type CondicionIva = typeof CONDICION_IVA[keyof typeof CONDICION_IVA]
 export const TIPO_COMPROBANTE = {
   FACTURA_A: "FACTURA_A",
   FACTURA_B: "FACTURA_B",
+  NOTA_CREDITO_A: "NOTA_CREDITO_A",
+  NOTA_CREDITO_B: "NOTA_CREDITO_B",
 } as const
 export type TipoComprobante = typeof TIPO_COMPROBANTE[keyof typeof TIPO_COMPROBANTE]
 
@@ -24,6 +26,17 @@ export function tipoComprobantePara(condicion: CondicionIva): TipoComprobante {
     condicion === CONDICION_IVA.MONOTRIBUTISTA
     ? TIPO_COMPROBANTE.FACTURA_A
     : TIPO_COMPROBANTE.FACTURA_B
+}
+
+export function esNotaCredito(tipo: TipoComprobante): boolean {
+  return tipo === TIPO_COMPROBANTE.NOTA_CREDITO_A || tipo === TIPO_COMPROBANTE.NOTA_CREDITO_B
+}
+
+// La NC es SIEMPRE de la misma letra que la factura que anula (RG 4540).
+export function notaCreditoPara(tipoFactura: TipoComprobante): TipoComprobante {
+  return tipoFactura === TIPO_COMPROBANTE.FACTURA_A
+    ? TIPO_COMPROBANTE.NOTA_CREDITO_A
+    : TIPO_COMPROBANTE.NOTA_CREDITO_B
 }
 
 // ─── CUIT: normalización + dígito verificador (módulo 11) ───────────────────
@@ -45,6 +58,19 @@ export const emitirFacturaSchema = z.object({
 })
 export type EmitirFacturaInput = z.infer<typeof emitirFacturaSchema>
 
+// El motivo es OBLIGATORIO: es "el hecho que la origina" de la RG 4540 (la NC
+// debe emitirse dentro de los 15 días corridos de ese hecho) y queda en el
+// comprobante y en el historial.
+export const emitirNotaCreditoSchema = z.object({
+  venta_id: zUuid(),
+  motivo: z
+    .string()
+    .trim()
+    .min(3, "Contá el motivo de la anulación (devolución, error de carga…)")
+    .max(200, "Máximo 200 caracteres"),
+})
+export type EmitirNotaCreditoInput = z.infer<typeof emitirNotaCreditoSchema>
+
 // ─── Fila de comprobante como la lee la UI ──────────────────────────────────
 export type Comprobante = {
   id: string
@@ -61,4 +87,7 @@ export type Comprobante = {
   total: number
   cae: string
   cae_vencimiento: string
+  // 0042: NULL = factura · NOT NULL = nota de crédito que anula ese comprobante
+  comprobante_asociado_id: string | null
+  motivo: string | null
 }

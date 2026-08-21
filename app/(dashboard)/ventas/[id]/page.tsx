@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { EmitirFacturaButton } from "@/components/ventas/EmitirFacturaButton"
+import { EmitirNotaCreditoButton } from "@/components/ventas/EmitirNotaCreditoButton"
 import { ROL } from "@/lib/constants"
 import { DOMINIO } from "@/lib/dominio"
 import { formatFecha, formatFechaHora, formatPesos } from "@/lib/utils"
@@ -35,6 +36,7 @@ import {
 import { nombreVisible, type TipoCliente } from "@/lib/validators/cliente"
 import {
   normalizarCuit,
+  notaCreditoPara,
   tipoComprobantePara,
   type Comprobante,
   type CondicionIva,
@@ -117,7 +119,7 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
 
   if (!venta) notFound()
 
-  const [{ data: items }, { data: comision }, { data: comprobanteRow }, { data: cfgCuit }] = await Promise.all([
+  const [{ data: items }, { data: comision }, { data: comprobantesRows }, { data: cfgCuit }] = await Promise.all([
     supabase
       .from("venta_items")
       .select("id, cantidad, precio_unitario, descuento_pct, descuento_manual_pct, precio_final_unit, origen_precio, comision_pct_snapshot, comision_monto, producto:producto_id ( id, id_publico, nombre )")
@@ -129,11 +131,13 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
       .select("monto_base, porcentaje, monto")
       .eq("venta_id", venta.id)
       .maybeSingle(),
+    // 0042: una venta facturada puede tener DOS comprobantes (factura + NC) —
+    // por eso lista y no maybeSingle.
     supabase
       .from("comprobantes")
-      .select("id, tipo, punto_venta, numero, fecha_emision, cuit_emisor, doc_tipo, doc_nro, condicion_iva_receptor, neto, iva, total, cae, cae_vencimiento")
+      .select("id, tipo, punto_venta, numero, fecha_emision, cuit_emisor, doc_tipo, doc_nro, condicion_iva_receptor, neto, iva, total, cae, cae_vencimiento, comprobante_asociado_id, motivo")
       .eq("venta_id", venta.id)
-      .maybeSingle<Comprobante>(),
+      .order("created_at"),
     // afip_cuit vacío = facturación electrónica todavía no configurada.
     supabase
       .from("configuracion")
@@ -141,6 +145,10 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
       .eq("clave", "afip_cuit")
       .maybeSingle(),
   ])
+
+  const comprobantes = (comprobantesRows ?? []) as unknown as Comprobante[]
+  const comprobanteRow = comprobantes.find((c) => !c.comprobante_asociado_id) ?? null
+  const notaCredito = comprobantes.find((c) => Boolean(c.comprobante_asociado_id)) ?? null
 
   const rows = (items ?? []) as unknown as ItemRow[]
   // ¿Hay productos con override de comisión en esta venta? Si todas las líneas
@@ -223,6 +231,17 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
                 tipoLabel={TIPO_COMPROBANTE_LABEL[tipoFactura]}
                 receptor={`${nombreVisible(venta.cliente)} (${CONDICION_IVA_LABEL[venta.cliente.condicion_iva]})`}
                 totalFmt={formatPesos(Number(venta.total))}
+              />
+            )}
+            {/* NC (0042): solo admin, solo con factura viva. Es lo que
+                desbloquea cancelar una venta facturada (freno fiscal 0040). */}
+            {esAdmin && comprobanteRow && !notaCredito && (
+              <EmitirNotaCreditoButton
+                ventaId={venta.id}
+                idPublico={venta.id_publico}
+                tipoLabel={TIPO_COMPROBANTE_LABEL[notaCreditoPara(comprobanteRow.tipo)]}
+                facturaLabel={`${TIPO_COMPROBANTE_LABEL[comprobanteRow.tipo]} ${formatNumeroComprobante(comprobanteRow.punto_venta, Number(comprobanteRow.numero))}`}
+                totalFmt={formatPesos(Number(comprobanteRow.total))}
               />
             )}
             {/* El módulo apagado se EXPLICA — el botón que no aparece sin decir
@@ -357,6 +376,11 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
                   <span className="font-mono text-app-accent">
                     {formatNumeroComprobante(comprobanteRow.punto_venta, Number(comprobanteRow.numero))}
                   </span>
+                  {notaCredito && (
+                    <Badge variant="red" className="ml-2 align-middle">
+                      Anulada
+                    </Badge>
+                  )}
                 </h2>
                 <p className="text-xs text-app-secondary font-mono mt-0.5">
                   Emitida {formatFecha(comprobanteRow.fecha_emision)} ·{" "}
@@ -400,6 +424,70 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
                 <p className="font-mono text-sm mt-1.5">{comprobanteRow.cae}</p>
                 <p className="text-[10.5px] font-mono text-app-muted mt-0.5">
                   vence {formatFecha(comprobanteRow.cae_vencimiento)}
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Nota de crédito (0042): la anulación fiscal de la factura de arriba */}
+        {notaCredito && (
+          <section className="rounded-xl border border-app-red/40 bg-app-card p-6 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-display font-semibold">
+                  {TIPO_COMPROBANTE_LABEL[notaCredito.tipo]}{" "}
+                  <span className="font-mono text-app-accent">
+                    {formatNumeroComprobante(notaCredito.punto_venta, Number(notaCredito.numero))}
+                  </span>
+                </h2>
+                <p className="text-xs text-app-secondary font-mono mt-0.5">
+                  Emitida {formatFecha(notaCredito.fecha_emision)} · anula{" "}
+                  {comprobanteRow
+                    ? `${TIPO_COMPROBANTE_LABEL[comprobanteRow.tipo]} ${formatNumeroComprobante(comprobanteRow.punto_venta, Number(comprobanteRow.numero))}`
+                    : "el comprobante de esta venta"}
+                </p>
+                {notaCredito.motivo && (
+                  <p className="text-xs text-app-secondary mt-1">Motivo: {notaCredito.motivo}</p>
+                )}
+              </div>
+              <div className="shrink-0 flex flex-col items-end gap-1.5">
+                <a
+                  href={`/factura/${venta.id}?doc=nc`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-mono text-app-accent hover:underline"
+                >
+                  Ver / imprimir nota de crédito ↗
+                </a>
+                <a
+                  href={qrUrlComprobante(notaCredito)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-mono text-app-muted hover:text-app-accent hover:underline"
+                >
+                  Verificar en ARCA ↗
+                </a>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-right border-t border-app-line-soft pt-4">
+              <div>
+                <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">Neto</p>
+                <p className="font-display text-lg mt-1">-{formatPesos(Number(notaCredito.neto))}</p>
+              </div>
+              <div>
+                <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">IVA</p>
+                <p className="font-display text-lg mt-1">-{formatPesos(Number(notaCredito.iva))}</p>
+              </div>
+              <div>
+                <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">Total</p>
+                <p className="font-display text-lg mt-1">-{formatPesos(Number(notaCredito.total))}</p>
+              </div>
+              <div>
+                <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">CAE</p>
+                <p className="font-mono text-sm mt-1.5">{notaCredito.cae}</p>
+                <p className="text-[10.5px] font-mono text-app-muted mt-0.5">
+                  vence {formatFecha(notaCredito.cae_vencimiento)}
                 </p>
               </div>
             </div>
