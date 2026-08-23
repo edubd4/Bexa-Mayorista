@@ -57,6 +57,30 @@ export type EmisionResult =
   | { ok: false; error: string }
   | { ok: true; numero: number; cae: string; caeVencimiento: string }
 
+// La causa REAL de una falla HTTP viaja en response.data — e.message de axios
+// solo dice "Request failed with status code 400", que no le sirve a nadie.
+// Afip SDK pone ahí el detalle (token inválido, cert mal formado, rechazo del
+// WS); esto lo desentierra para que el toast muestre el motivo de verdad.
+function mensajeErrorEmision(e: unknown): string {
+  if (e && typeof e === "object" && "response" in e) {
+    const data = (e as { response?: { data?: unknown } }).response?.data
+    if (typeof data === "string" && data.trim()) return data.trim()
+    if (data && typeof data === "object") {
+      const d = data as Record<string, unknown>
+      for (const campo of ["message", "error", "detail"]) {
+        const valor = d[campo]
+        if (typeof valor === "string" && valor.trim()) return valor.trim()
+      }
+      try {
+        return JSON.stringify(data)
+      } catch {
+        // cuerpo no serializable — cae al mensaje genérico de abajo
+      }
+    }
+  }
+  return e instanceof Error ? e.message : "Error desconocido del web service"
+}
+
 // Fecha de hoy en la zona del negocio, como la exige el WS (yyyymmdd numérico).
 function fechaComprobanteHoy(): { cbteFch: number; iso: string } {
   const iso = new Date().toLocaleDateString("en-CA", {
@@ -141,7 +165,7 @@ export async function emitirComprobanteAfip(params: EmisionParams): Promise<Emis
   } catch (e) {
     // Los errores del WS traen el mensaje normativo de ARCA (ej. 10242 por
     // condición IVA inválida) — se muestran tal cual: son la explicación real.
-    const msg = e instanceof Error ? e.message : "Error desconocido del web service"
-    return { ok: false, error: `ARCA rechazó la emisión: ${msg}` }
+    // Los HTTP de Afip SDK se desentierran de response.data (ver helper).
+    return { ok: false, error: `ARCA rechazó la emisión: ${mensajeErrorEmision(e)}` }
   }
 }
