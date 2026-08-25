@@ -123,6 +123,10 @@ export default async function FacturaPage({
 
   return (
     <div className="min-h-screen bg-neutral-200 print:bg-white py-8 print:py-0 px-4 text-black">
+      {/* Margen de página 0: el navegador imprime SU cabecera y pie (URL,
+          fecha, "1/1") EN el margen — sin margen, no hay dónde y desaparecen.
+          El respiro del papel lo pone el padding del propio documento. */}
+      <style>{`@media print { @page { size: A4; margin: 0; } }`}</style>
       <div className="max-w-[210mm] mx-auto space-y-4">
         <div className="flex justify-end print:hidden">
           <PrintButton label={esNC ? "Imprimir nota de crédito" : "Imprimir factura"} />
