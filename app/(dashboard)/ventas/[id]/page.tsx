@@ -244,6 +244,19 @@ export default async function VentaDetallePage({ params }: { params: Params }) {
                 totalFmt={formatPesos(Number(comprobanteRow.total))}
               />
             )}
+            {/* Recibo no fiscal: sale de los datos de la venta, no necesita
+                ARCA — es lo que se le entrega al comprador mientras la
+                facturación electrónica no esté configurada (o además de ella). */}
+            {venta.estado_cobro !== "CANCELADA" && (
+              <a
+                href={`/recibo/${venta.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-mono text-app-muted hover:text-app-accent hover:underline"
+              >
+                Ver / imprimir recibo ↗
+              </a>
+            )}
             {/* El módulo apagado se EXPLICA — el botón que no aparece sin decir
                 por qué se lee como "está roto" (reporte 2026-08-19). Solo en
                 ventas facturables (con comprobante ya emitido no falta nada). */}

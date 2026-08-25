@@ -707,11 +707,21 @@ export const SECCIONES: SeccionManual[] = [
         ],
       },
       {
+        tipo: "lista",
+        titulo: "El recibo — comprobante para el cliente SIN factura",
+        items: [
+          "Toda venta activa tiene 'Ver / imprimir recibo' en su detalle: un comprobante en A4 con los productos, el total y, si el pago fue parcial, cuánto entregó y cuánto debe.",
+          "No necesita ARCA: sale de los datos de la venta, así que funciona aunque la facturación electrónica no esté configurada todavía o el servicio esté caído.",
+          "Es un documento NO fiscal — sale con letra X y la leyenda 'Documento no válido como factura'. Sirve como constancia de entrega y de cobro; NO reemplaza a la factura.",
+          "Recibo y factura conviven en la misma venta: si el cliente además necesita factura, se emite igual que siempre.",
+        ],
+      },
+      {
         tipo: "aviso",
         nivel: "info",
         titulo: "¿ARCA caído? La venta no se frena",
         texto:
-          "Si ARCA no responde, registrá la venta igual — stock, cobro y comisión no dependen de ARCA. La factura la emitís después desde el detalle, cuando el servicio vuelva.",
+          "Si ARCA no responde, registrá la venta igual — stock, cobro y comisión no dependen de ARCA. La factura la emitís después desde el detalle, cuando el servicio vuelva. Mientras tanto, el recibo le da al cliente su constancia.",
       },
     ],
   },
