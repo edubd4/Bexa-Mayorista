@@ -104,6 +104,10 @@ export default async function ReciboPage({
 
   return (
     <div className={`min-h-screen bg-neutral-200 print:bg-white ${embed ? "py-4" : "py-8"} print:py-0 px-4 text-black`}>
+      {/* Margen de página 0: el navegador imprime SU cabecera y pie (URL,
+          fecha, "1/1") EN el margen — sin margen, no hay dónde y desaparecen.
+          El respiro del papel lo pone el padding del propio documento. */}
+      <style>{`@media print { @page { size: A4; margin: 0; } }`}</style>
       <div className="max-w-[210mm] mx-auto space-y-4">
         {!embed && (
           <div className="flex justify-end print:hidden">
@@ -112,10 +116,9 @@ export default async function ReciboPage({
         )}
 
         <div className="bg-white shadow print:shadow-none p-8 text-[13px] leading-snug font-sans">
-          {/* ── Cabecera: emisor | letra X | recibo ── */}
-          <p className="text-center text-[10px] tracking-[0.3em] uppercase mb-2">
-            Documento no válido como factura
-          </p>
+          {/* ── Cabecera: emisor | letra X | recibo ──
+              La leyenda "no válido como factura" va SOLO al pie (pedido
+              2026-08-25) — arriba alcanza con la letra X / NO FISCAL. */}
           <div className="grid grid-cols-[1fr_auto_1fr] border border-black">
             <div className="p-4">
               <p className="text-lg font-bold uppercase">{emisor}</p>
