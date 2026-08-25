@@ -49,10 +49,20 @@ type ItemRecibo = {
 
 // negocio_nombre viene de los seeds (0002) y existe siempre; los afip_* (0031)
 // pueden estar vacíos si la facturación electrónica aún no se configuró — el
-// recibo usa lo que haya y no exige nada.
-const CLAVES_CONFIG = ["negocio_nombre", "afip_razon_social", "afip_domicilio", "afip_cuit"] as const
+// recibo usa lo que haya y no exige nada. Sin CUIT a propósito (2026-08-25):
+// es el comprobante informal para el comprador — los datos fiscales viven en
+// la factura, que es el documento que los exige.
+const CLAVES_CONFIG = ["negocio_nombre", "afip_razon_social", "afip_domicilio"] as const
 
-export default async function ReciboPage({ params }: { params: Params }) {
+export default async function ReciboPage({
+  params,
+  searchParams,
+}: {
+  params: Params
+  // ?embed=1: la vista se incrusta en el diálogo post-cobro de Nueva venta —
+  // el botón de imprimir sobra ahí (el diálogo tiene el suyo).
+  searchParams?: { embed?: string }
+}) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
@@ -90,23 +100,29 @@ export default async function ReciboPage({ params }: { params: Params }) {
     ? [venta.cliente.direccion, venta.cliente.ciudad, venta.cliente.provincia].filter(Boolean).join(", ")
     : ""
 
+  const embed = Boolean(searchParams?.embed)
+
   return (
-    <div className="min-h-screen bg-neutral-200 print:bg-white py-8 print:py-0 px-4 text-black">
+    <div className={`min-h-screen bg-neutral-200 print:bg-white ${embed ? "py-4" : "py-8"} print:py-0 px-4 text-black`}>
+      {/* Margen de página 0: el navegador imprime SU cabecera y pie (URL,
+          fecha, "1/1") EN el margen — sin margen, no hay dónde y desaparecen.
+          El respiro del papel lo pone el padding del propio documento. */}
+      <style>{`@media print { @page { size: A4; margin: 0; } }`}</style>
       <div className="max-w-[210mm] mx-auto space-y-4">
-        <div className="flex justify-end print:hidden">
-          <PrintButton label="Imprimir recibo" />
-        </div>
+        {!embed && (
+          <div className="flex justify-end print:hidden">
+            <PrintButton label="Imprimir recibo" />
+          </div>
+        )}
 
         <div className="bg-white shadow print:shadow-none p-8 text-[13px] leading-snug font-sans">
-          {/* ── Cabecera: emisor | letra X | recibo ── */}
-          <p className="text-center text-[10px] tracking-[0.3em] uppercase mb-2">
-            Documento no válido como factura
-          </p>
+          {/* ── Cabecera: emisor | letra X | recibo ──
+              La leyenda "no válido como factura" va SOLO al pie (pedido
+              2026-08-25) — arriba alcanza con la letra X / NO FISCAL. */}
           <div className="grid grid-cols-[1fr_auto_1fr] border border-black">
             <div className="p-4">
               <p className="text-lg font-bold uppercase">{emisor}</p>
               {cfg.afip_domicilio && <p className="mt-2">{cfg.afip_domicilio}</p>}
-              {cfg.afip_cuit && <p className="mt-1">CUIT: {cfg.afip_cuit}</p>}
             </div>
             <div className="border-x border-black px-4 py-2 text-center self-start -mb-px bg-white">
               <p className="text-4xl font-bold leading-none">X</p>
