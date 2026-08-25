@@ -514,7 +514,7 @@ export const SECCIONES: SeccionManual[] = [
           {
             titulo: "7 · ¿Te pagan en el acto? Botón 'Cobrar ahora'",
             detalle:
-              "Abre la ventana de pago: ves el total, elegís el método a un toque (efectivo, transferencia, débito, crédito, Mercado Pago) y confirmás. Se registra la venta Y el cobro juntos — la plata entra a la caja al instante. Si el cliente paga después, no toques este botón: registrá con el botón de abajo y cobrala desde la ficha cuando te paguen.",
+              "Es el botón grande al pie del formulario — el camino normal: acá casi siempre se cobra en el momento. Abre la ventana de pago: ves el total, elegís el método a un toque (efectivo, transferencia, débito, crédito, Mercado Pago) y confirmás. Se registra la venta Y el cobro juntos — la plata entra a la caja al instante. Si el cliente paga después, usá 'Registrar sin cobrar', al lado: la venta queda pendiente y la cobrás desde la ficha cuando te paguen.",
           },
           {
             titulo: "8 · Notas y confirmar",

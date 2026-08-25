@@ -122,8 +122,9 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
   // Cobro en el acto (2026-08-19, rediseñado 2026-08-20): un BOTÓN que abre
   // el diálogo de pago — el patrón de todo punto de venta (elegir método →
   // confirmar). Confirmar encadena cobrar_venta con el total — mismo circuito
-  // que el botón Cobrar de la ficha y que el mostrador. El submit normal
-  // registra a cuenta, que en mayorista sigue siendo lo habitual.
+  // que el botón Cobrar de la ficha y que el mostrador. Acá lo habitual es
+  // cobrar en el momento — por eso es la acción primaria del pie (2026-08-25);
+  // el submit normal registra a cuenta, que es la excepción.
   const [cobroOpen, setCobroOpen] = useState(false)
   const [metodoPago, setMetodoPago] = useState<MetodoPago>(METODO_PAGO.EFECTIVO)
   // Bonificación "a toda la venta": azúcar de UI — replica el % en cada línea.
@@ -598,75 +599,6 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
             Pone el mismo % en todas las líneas — la columna Bonif se puede retocar una por una.
           </p>
         </div>
-
-        {/* Cobro en el acto: BOTÓN que abre el diálogo de pago (patrón de punto
-            de venta). Registrar sin cobrar sigue siendo el camino de la venta
-            a cuenta — la de siempre en mayorista. */}
-        <div className="pt-3 border-t border-app-line-soft flex flex-col sm:flex-row sm:items-center gap-3">
-          <Dialog.Root open={cobroOpen} onOpenChange={setCobroOpen}>
-            <Dialog.Trigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isPending || !puedeGuardar}
-              >
-                <Wallet className="w-4 h-4" />
-                Cobrar ahora ({formatPesos(totales.total)})
-              </Button>
-            </Dialog.Trigger>
-            <Dialog.Portal>
-              <Dialog.Overlay className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in-0 duration-150" />
-              <Dialog.Content className="fixed z-[91] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] sm:max-w-md rounded-xl border border-app-line-soft bg-app-card shadow-2xl p-6 space-y-4 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 duration-150">
-                <div>
-                  <Dialog.Title className="font-display text-lg font-semibold text-app-text">
-                    Cobrar ahora
-                  </Dialog.Title>
-                  <Dialog.Description className="text-sm text-app-secondary mt-1">
-                    Se registra la venta y el cobro entra a la caja en el mismo acto.
-                  </Dialog.Description>
-                </div>
-
-                <div className="rounded-lg border border-app-line-soft bg-app-surface-mid/40 px-4 py-3 text-center">
-                  <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">Total a cobrar</p>
-                  <p className="font-display text-3xl text-app-accent mt-1">{formatPesos(totales.total)}</p>
-                </div>
-
-                {/* Método de pago a un toque, como en el mostrador. */}
-                <div className="space-y-1.5">
-                  <span className="text-sm text-app-secondary">Método de pago</span>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(Object.keys(METODO_PAGO) as MetodoPago[]).map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setMetodoPago(m)}
-                        className={`rounded-lg border px-3 py-2.5 text-sm transition-colors ${
-                          metodoPago === m
-                            ? "border-app-accent bg-app-accent/15 text-app-accent font-semibold"
-                            : "border-app-line-soft bg-app-card text-app-secondary hover:border-app-line hover:text-app-text"
-                        }`}
-                      >
-                        {METODO_PAGO_LABEL[m]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-1">
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setCobroOpen(false)}>
-                    Volver
-                  </Button>
-                  <Button type="button" size="sm" disabled={isPending} onClick={confirmarCobro}>
-                    {isPending ? "Registrando…" : `Cobrar y registrar · ${METODO_PAGO_LABEL[metodoPago]}`}
-                  </Button>
-                </div>
-              </Dialog.Content>
-            </Dialog.Portal>
-          </Dialog.Root>
-          <p className="text-[11px] text-app-muted font-mono sm:ml-auto">
-            ¿Te pagan después? Registrá abajo: la venta queda pendiente y la cobrás desde la ficha.
-          </p>
-        </div>
       </section>
 
       {/* Notas */}
@@ -687,6 +619,9 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
         </div>
       )}
 
+      {/* Acciones: acá se cobra en el acto casi siempre — por eso "Cobrar
+          ahora" es EL botón (jerarquía pedida 2026-08-25). La venta a cuenta
+          existe pero es la excepción: queda al lado, como secundario. */}
       <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3">
         {afipConfigurada && (
           <label
@@ -716,10 +651,70 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
         <Button variant="ghost" asChild disabled={isPending}>
           <Link href={DOMINIO.ventas.ruta}>Cancelar</Link>
         </Button>
-        <Button type="submit" size="lg" disabled={isPending || !puedeGuardar}>
-          {isPending ? "Registrando…" : "Registrar venta"}
+        <Button type="submit" variant="outline" disabled={isPending || !puedeGuardar}>
+          {isPending ? "Registrando…" : "Registrar sin cobrar"}
         </Button>
+        <Dialog.Root open={cobroOpen} onOpenChange={setCobroOpen}>
+          <Dialog.Trigger asChild>
+            <Button type="button" size="lg" disabled={isPending || !puedeGuardar}>
+              <Wallet className="w-5 h-5" />
+              {isPending ? "Registrando…" : `Cobrar ahora (${formatPesos(totales.total)})`}
+            </Button>
+          </Dialog.Trigger>
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in-0 duration-150" />
+            <Dialog.Content className="fixed z-[91] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] sm:max-w-md rounded-xl border border-app-line-soft bg-app-card shadow-2xl p-6 space-y-4 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 duration-150">
+              <div>
+                <Dialog.Title className="font-display text-lg font-semibold text-app-text">
+                  Cobrar ahora
+                </Dialog.Title>
+                <Dialog.Description className="text-sm text-app-secondary mt-1">
+                  Se registra la venta y el cobro entra a la caja en el mismo acto.
+                </Dialog.Description>
+              </div>
+
+              <div className="rounded-lg border border-app-line-soft bg-app-surface-mid/40 px-4 py-3 text-center">
+                <p className="font-mono text-[10.5px] text-app-muted uppercase tracking-widest">Total a cobrar</p>
+                <p className="font-display text-3xl text-app-accent mt-1">{formatPesos(totales.total)}</p>
+              </div>
+
+              {/* Método de pago a un toque, como en el mostrador. */}
+              <div className="space-y-1.5">
+                <span className="text-sm text-app-secondary">Método de pago</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {(Object.keys(METODO_PAGO) as MetodoPago[]).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMetodoPago(m)}
+                      className={`rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+                        metodoPago === m
+                          ? "border-app-accent bg-app-accent/15 text-app-accent font-semibold"
+                          : "border-app-line-soft bg-app-card text-app-secondary hover:border-app-line hover:text-app-text"
+                      }`}
+                    >
+                      {METODO_PAGO_LABEL[m]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-1">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setCobroOpen(false)}>
+                  Volver
+                </Button>
+                <Button type="button" size="sm" disabled={isPending} onClick={confirmarCobro}>
+                  {isPending ? "Registrando…" : `Cobrar y registrar · ${METODO_PAGO_LABEL[metodoPago]}`}
+                </Button>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
       </div>
+
+      <p className="text-[11px] text-app-muted font-mono text-right">
+        ¿Te pagan después? &apos;Registrar sin cobrar&apos; deja la venta pendiente y la cobrás desde la ficha.
+      </p>
     </form>
   )
 }
