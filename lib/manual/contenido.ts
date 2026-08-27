@@ -514,7 +514,7 @@ export const SECCIONES: SeccionManual[] = [
           {
             titulo: "7 · ¿Te pagan en el acto? Botón 'Cobrar ahora'",
             detalle:
-              "Es el botón grande al pie del formulario — el camino normal: acá casi siempre se cobra en el momento. Abre la ventana de pago: ves el total, elegís el método a un toque (efectivo, transferencia, débito, crédito, Mercado Pago) y confirmás. Se registra la venta Y el cobro juntos — la plata entra a la caja al instante. Si no tildaste 'Emitir factura', al terminar te aparece el comprobante de pago (recibo) con su botón Imprimir — entregáselo al cliente. Si el cliente paga después, usá 'Registrar sin cobrar', al lado: la venta queda pendiente y la cobrás desde la ficha cuando te paguen.",
+              "Es el botón grande al pie del formulario — el camino normal: acá casi siempre se cobra en el momento. Abre la ventana de pago: ves el total, elegís el método a un toque (efectivo, transferencia, débito, crédito, Mercado Pago) y confirmás. Se registra la venta Y el cobro juntos — la plata entra a la caja al instante. Al terminar aparece SIEMPRE el comprobante en pantalla con su botón Imprimir: la factura si la emitiste, el recibo no fiscal si no — entregáselo al cliente. Si el cliente paga después, usá 'Registrar sin cobrar', al lado: la venta queda pendiente y la cobrás desde la ficha cuando te paguen.",
           },
           {
             titulo: "8 · Notas y confirmar",
@@ -714,7 +714,7 @@ export const SECCIONES: SeccionManual[] = [
           "No necesita ARCA: sale de los datos de la venta, así que funciona aunque la facturación electrónica no esté configurada todavía o el servicio esté caído.",
           "Es un documento NO fiscal — sale con letra X y la leyenda 'Documento no válido como factura'. Sirve como constancia de entrega y de cobro; NO reemplaza a la factura.",
           "Recibo y factura conviven en la misma venta: si el cliente además necesita factura, se emite igual que siempre.",
-          "¿Cobraste sin tildar 'Emitir factura'? El sistema te muestra el recibo apenas se confirma el cobro, con el botón Imprimir ahí mismo — el cliente se lleva su comprobante siempre, sin pasos extra.",
+          "Al cobrar — en Nueva venta o en el Mostrador — el comprobante aparece SIEMPRE apenas se confirma el cobro, con el botón Imprimir ahí mismo: la factura si salió autorizada, el recibo si no. Es un paso del cobro, no un opcional — el cliente se lleva su papel siempre.",
         ],
       },
       {
@@ -774,9 +774,19 @@ export const SECCIONES: SeccionManual[] = [
               "Arranca en 'Consumidor Final', que es lo correcto para el mostrador. Si el que compra es un cliente con cuenta (y su lista de precios), elegilo — los precios se recalculan solos.",
           },
           {
-            titulo: "6 · Método de pago y 'Cobrar y cerrar'",
+            titulo: "6 · ¿Descuento negociado? Columna Bonif %",
             detalle:
-              "Elegís el método, y si corresponde marcás 'Emitir factura'. 'Cobrar y cerrar' registra la venta, mete el cobro en la caja y deja el carrito listo para el próximo cliente. Arriba te queda el acceso a la venta cerrada y a imprimir la factura.",
+              "Cada línea del carrito tiene su Bonif % — el mismo mecanismo que Nueva venta: se aplica encima del precio ya resuelto, queda registrado y ajusta la comisión. Para el descuento de reglas (listas, cantidad) no tocás nada: sale solo.",
+          },
+          {
+            titulo: "7 · Método de pago y 'Cobrar y cerrar'",
+            detalle:
+              "Elegís el método, y si corresponde marcás 'Emitir factura'. 'Cobrar y cerrar' registra la venta, mete el cobro en la caja y deja el carrito listo para el próximo cliente.",
+          },
+          {
+            titulo: "8 · El comprobante sale SIEMPRE",
+            detalle:
+              "Apenas cierra el cobro aparece el comprobante en pantalla con su botón Imprimir: la factura si la emitiste, el recibo no fiscal si no. Imprimílo y entregáselo — el cliente no se va sin su papel. 'Continuar' te devuelve al escáner para el próximo.",
           },
         ],
       },
@@ -785,7 +795,7 @@ export const SECCIONES: SeccionManual[] = [
         nivel: "info",
         titulo: "¿Mostrador o Nueva venta?",
         texto:
-          "Mostrador: cliente presente, paga ya, se lleva la mercadería. Nueva venta: todo lo demás — venta a cuenta, entrega para después, atribución a campaña, notas internas o bonificación manual. Si en el medio de una venta de mostrador el cliente te pide un descuento especial, pasate a Nueva venta: ahí tenés la columna Bonif % y el botón Cobrar ahora, que es el mismo cobro en el acto.",
+          "Mostrador: cliente presente, paga ya, se lleva la mercadería. Nueva venta: todo lo demás — venta a cuenta, entrega para después, atribución a campaña o notas internas. La bonificación manual y la factura las tenés en las dos pantallas.",
       },
       {
         tipo: "aviso",

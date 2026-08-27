@@ -16,9 +16,14 @@ import { cobrarVenta } from "@/app/(dashboard)/caja/actions"
 import {
   buscarProductoPorCodigo, buscarProductosPorNombre, type ProductoPos,
 } from "@/app/(dashboard)/pos/actions"
+import { ComprobanteDialog } from "@/components/ventas/ComprobanteDialog"
 import { DOMINIO } from "@/lib/dominio"
 import { METODO_PAGO, type MetodoPago } from "@/lib/constants"
-import { CONDICION_IVA_LABEL, TIPO_COMPROBANTE_LABEL } from "@/lib/facturacion-ui"
+import {
+  CONDICION_IVA_LABEL,
+  TIPO_COMPROBANTE_LABEL,
+  motivoFacturaPendiente,
+} from "@/lib/facturacion-ui"
 import { METODO_PAGO_LABEL } from "@/lib/caja-ui"
 import { formatPesos } from "@/lib/utils"
 import { CONSUMIDOR_FINAL_ID } from "@/lib/validators/cliente"
@@ -42,6 +47,9 @@ type Linea = {
   key: string
   producto: ProductoPos
   cantidad: number
+  // Bonificación manual del vendedor (0041), misma columna que Nueva venta —
+  // el mostrador también negocia (pedido 2026-08-27: todo el proceso acá).
+  bonif: number | null
   resolving: boolean
   precio: PrecioResuelto | null
   error: string | null
@@ -67,6 +75,15 @@ function nombreCliente(c: ClientePos): string {
 let seq = 0
 const nextKey = () => `pos-${++seq}-${Date.now()}`
 
+// El precio unitario final CON bonificación, redondeado POR UNIDAD — el mismo
+// cálculo que hace la RPC (0041) y que muestra VentaForm. Redondear acá evita
+// que la pantalla cante un total distinto del que guarda la base.
+function unitConBonif(l: Linea): number {
+  if (!l.precio) return 0
+  const pct = l.bonif ?? 0
+  return Math.round(l.precio.precio_final * (1 - pct / 100) * 100) / 100
+}
+
 export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
   const toast = useToast()
   const scanRef = useRef<HTMLInputElement>(null)
@@ -82,6 +99,10 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
   const [facturar, setFacturar] = useState(false)
   const [ultima, setUltima] = useState<UltimaVenta | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
+  // Comprobante post-cobro SIEMPRE (2026-08-27): factura si ARCA la autorizó,
+  // recibo no fiscal si no — el cliente no se va del mostrador sin papel.
+  const [comprobante, setComprobante] =
+    useState<{ ventaId: string; doc: "factura" | "recibo" } | null>(null)
   const [isPending, startTransition] = useTransition()
 
   // El lector es un teclado: el input de escaneo tiene que estar SIEMPRE
@@ -142,7 +163,7 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
       }
       const key = nextKey()
       resolverLinea(key, p.id, 1, clienteId)
-      return [...prev, { key, producto: p, cantidad: 1, resolving: true, precio: null, error: null }]
+      return [...prev, { key, producto: p, cantidad: 1, bonif: null, resolving: true, precio: null, error: null }]
     })
   }, [clienteId, resolverLinea])
 
@@ -187,13 +208,23 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
     focusScan()
   }
 
+  // Bonificación por línea: no toca el server — se aplica en pantalla sobre
+  // el precio ya resuelto y viaja recién al registrar (igual que VentaForm).
+  function updateBonif(key: string, bonif: number | null) {
+    setLineas((prev) => prev.map((l) => (l.key === key ? { ...l, bonif } : l)))
+  }
+
   const total = useMemo(
-    () => lineas.reduce((s, l) => s + (l.precio ? l.precio.precio_final * l.cantidad : 0), 0),
+    () => lineas.reduce((s, l) => s + (l.precio ? unitConBonif(l) * l.cantidad : 0), 0),
     [lineas],
   )
   const puedeCerrar =
     lineas.length > 0 &&
-    lineas.every((l) => l.cantidad > 0 && l.precio && !l.error && !l.resolving)
+    lineas.every(
+      (l) =>
+        l.cantidad > 0 && l.precio && !l.error && !l.resolving &&
+        (l.bonif === null || (l.bonif >= 0 && l.bonif <= 100)),
+    )
 
   // ── Cierre: registrar + cobrar + facturar, en ese orden ──────────────────
   // Si ARCA falla, la venta y el cobro YA están hechos — el mostrador nunca
@@ -203,7 +234,11 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
     startTransition(async () => {
       const res = await registrarVenta({
         cliente_id: clienteId,
-        items: lineas.map((l) => ({ producto_id: l.producto.id, cantidad: l.cantidad })),
+        items: lineas.map((l) => ({
+          producto_id: l.producto.id,
+          cantidad: l.cantidad,
+          descuento_manual_pct: l.bonif ?? undefined,
+        })),
         estado_entrega: "ENTREGADA",
         notas: undefined,
         campana_id: undefined,
@@ -229,7 +264,7 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
         const fact = await emitirFactura({ venta_id: ventaId })
         facturada = fact.ok
         if (!fact.ok) {
-          toast.error(`La factura no salió: ${fact.error} — emitila desde la ficha.`)
+          toast.error(`Venta registrada, pero sin factura: ${motivoFacturaPendiente(fact.error)}. Se puede emitir después desde la ficha.`)
         }
       }
 
@@ -242,6 +277,12 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
       setClienteId(CONSUMIDOR_FINAL_ID)
       setMetodo(METODO_PAGO.EFECTIVO)
       setFacturar(false)
+      // Comprobante post-cobro SIEMPRE: la factura si salió, el recibo si no.
+      // Con cobro fallido no hay comprobante de pago que valga — el banner de
+      // última venta queda con los links para resolverlo.
+      if (cobro.ok) {
+        setComprobante({ ventaId, doc: facturada ? "factura" : "recibo" })
+      }
       focusScan()
     })
   }
@@ -355,13 +396,14 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
               <TableHead>Producto</TableHead>
               <TableHead className="w-28 text-right">Cant</TableHead>
               <TableHead className="w-28 text-right">Precio</TableHead>
+              <TableHead className="w-24 text-right">Bonif %</TableHead>
               <TableHead className="w-28 text-right">Subtotal</TableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {lineas.length === 0 ? (
-              <TableEmpty colSpan={5}>Carrito vacío — escaneá el primer producto.</TableEmpty>
+              <TableEmpty colSpan={6}>Carrito vacío — escaneá el primer producto.</TableEmpty>
             ) : (
               lineas.map((l) => {
                 // Sin control de stock (0034) no hay nada que exceder: el RPC
@@ -390,8 +432,26 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
                         <p className="text-[10.5px] text-app-green">-{Number(l.precio.descuento_pct)}%</p>
                       )}
                     </TableCell>
+                    <TableCell className="text-right">
+                      {/* Bonificación manual (0041): remata el precio resuelto.
+                          Vacío = sin bonificar — misma columna que Nueva venta. */}
+                      <NumberInput
+                        decimals={2}
+                        max={100}
+                        value={l.bonif}
+                        onChange={(v) => updateBonif(l.key, v)}
+                        placeholder="—"
+                        disabled={isPending}
+                        aria-label="Bonificación manual %"
+                      />
+                    </TableCell>
                     <TableCell className="text-right font-mono text-sm">
-                      {l.precio ? formatPesos(l.precio.precio_final * l.cantidad) : "—"}
+                      {l.precio ? formatPesos(unitConBonif(l) * l.cantidad) : "—"}
+                      {l.precio && (l.bonif ?? 0) > 0 && (
+                        <p className="text-[10.5px] text-app-amber">
+                          bonif. {formatPesos(unitConBonif(l))}/u
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Button type="button" variant="ghost" size="icon" onClick={() => quitarLinea(l.key)} aria-label="Quitar">
@@ -472,6 +532,17 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
           </Button>
         </div>
       </section>
+
+      {/* El paso final del cobro: factura o recibo, pero papel SIEMPRE.
+          Continuar vuelve al escáner — la fila sigue. */}
+      <ComprobanteDialog
+        ventaId={comprobante?.ventaId ?? null}
+        doc={comprobante?.doc ?? "recibo"}
+        onContinuar={() => {
+          setComprobante(null)
+          focusScan()
+        }}
+      />
     </div>
   )
 }

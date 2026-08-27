@@ -31,6 +31,21 @@ export function formatNumeroComprobante(puntoVenta: number, numero: number): str
   return `${String(puntoVenta).padStart(4, "0")}-${String(numero).padStart(8, "0")}`
 }
 
+// ─── Motivo "humano" cuando la factura no salió ─────────────────────────────
+// El que está cobrando no necesita la jerga del web service — necesita saber
+// que la venta está BIEN y por qué no hay factura. Los errores de
+// configuración/credenciales (env vars, token, HTTP crudo tipo "Request
+// failed with status code 400") se traducen a "falta configurar"; los
+// rechazos normativos de ARCA se muestran tal cual, porque son la explicación
+// real (ej. condición de IVA inválida).
+export function motivoFacturaPendiente(error: string): string {
+  const esConfiguracion =
+    /no configurada|falta |faltan |access.?token|certificado|request failed|status code/i.test(error)
+  return esConfiguracion
+    ? "la facturación en ARCA todavía no está configurada (lo termina el admin)"
+    : `ARCA la rechazó — ${error}`
+}
+
 // ─── QR obligatorio del comprobante (RG 4892) ───────────────────────────────
 // La URL codifica el JSON del comprobante en base64; al escanearla, ARCA
 // muestra la validez. Va impresa en la factura y como link "Verificar".
