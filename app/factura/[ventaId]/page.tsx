@@ -61,7 +61,9 @@ export default async function FacturaPage({
   searchParams,
 }: {
   params: Params
-  searchParams?: { doc?: string }
+  // ?embed=1: la vista se incrusta en el diálogo post-cobro — el botón de
+  // imprimir sobra ahí (el diálogo tiene el suyo).
+  searchParams?: { doc?: string; embed?: string }
 }) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -128,9 +130,11 @@ export default async function FacturaPage({
           El respiro del papel lo pone el padding del propio documento. */}
       <style>{`@media print { @page { size: A4; margin: 0; } }`}</style>
       <div className="max-w-[210mm] mx-auto space-y-4">
-        <div className="flex justify-end print:hidden">
-          <PrintButton label={esNC ? "Imprimir nota de crédito" : "Imprimir factura"} />
-        </div>
+        {!searchParams?.embed && (
+          <div className="flex justify-end print:hidden">
+            <PrintButton label={esNC ? "Imprimir nota de crédito" : "Imprimir factura"} />
+          </div>
+        )}
 
         <div className="bg-white shadow print:shadow-none p-8 text-[13px] leading-snug font-sans">
           {/* ── Cabecera: emisor | letra | comprobante ── */}

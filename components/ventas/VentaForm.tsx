@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import * as Dialog from "@radix-ui/react-dialog"
-import { BadgePercent, FileCheck2, Plus, Printer, Trash2, Wallet } from "lucide-react"
+import { BadgePercent, FileCheck2, Plus, Trash2, Wallet } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SearchSelect, type SearchSelectOption } from "@/components/ui/search-select"
 import { Label } from "@/components/ui/label"
@@ -23,8 +23,13 @@ import {
 } from "@/components/ui/table"
 import { emitirFactura, registrarVenta, resolverPrecio } from "@/app/(dashboard)/ventas/actions"
 import { cobrarVenta } from "@/app/(dashboard)/caja/actions"
+import { ComprobanteDialog } from "@/components/ventas/ComprobanteDialog"
 import { DOMINIO } from "@/lib/dominio"
-import { CONDICION_IVA_LABEL, TIPO_COMPROBANTE_LABEL } from "@/lib/facturacion-ui"
+import {
+  CONDICION_IVA_LABEL,
+  TIPO_COMPROBANTE_LABEL,
+  motivoFacturaPendiente,
+} from "@/lib/facturacion-ui"
 import { METODO_PAGO_LABEL } from "@/lib/caja-ui"
 import { formatPesos } from "@/lib/utils"
 import { explicarOrigenPrecio } from "@/lib/ventas-ui"
@@ -127,11 +132,11 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
   // el submit normal registra a cuenta, que es la excepción.
   const [cobroOpen, setCobroOpen] = useState(false)
   const [metodoPago, setMetodoPago] = useState<MetodoPago>(METODO_PAGO.EFECTIVO)
-  // Comprobante de pago SIEMPRE (2026-08-25): si el cobro entró y no salió
-  // factura (checkbox apagado, o ARCA falló), este id abre el diálogo con el
-  // recibo listo para imprimir — el cliente no se va sin papel.
-  const [reciboVentaId, setReciboVentaId] = useState<string | null>(null)
-  const reciboFrameRef = useRef<HTMLIFrameElement>(null)
+  // Comprobante post-cobro SIEMPRE (2026-08-27): factura si ARCA la autorizó,
+  // recibo no fiscal si no — el cliente no se va sin papel. Es un paso del
+  // cobro, no un opcional.
+  const [comprobante, setComprobante] =
+    useState<{ ventaId: string; doc: "factura" | "recibo" } | null>(null)
   // Bonificación "a toda la venta": azúcar de UI — replica el % en cada línea.
   const [bonifGlobal, setBonifGlobal] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -349,7 +354,7 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
         if (fact.ok) {
           toast.success(`Venta registrada${sufijoCobro(conCobro, cobroFallo, metodoPago)} · ${TIPO_COMPROBANTE_LABEL[tipoFactura]} emitida con CAE`)
         } else {
-          toast.error(`Venta registrada, pero la factura no salió: ${fact.error} — podés emitirla desde la ficha.`)
+          toast.error(`Venta registrada, pero sin factura: ${motivoFacturaPendiente(fact.error)}. Se puede emitir después desde la ficha.`)
         }
       } else {
         toast.success(`Venta registrada${sufijoCobro(conCobro, cobroFallo, metodoPago)}`)
@@ -360,11 +365,11 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
         toast.error(`El cobro no se registró: ${cobroFallo} — cobrala desde la ficha.`)
       }
 
-      // Comprobante de pago SIEMPRE: cobro adentro y sin factura (checkbox
-      // apagado, o ARCA falló) → el recibo aparece al toque para imprimir.
-      // Con factura emitida (o cobro fallido) se va al detalle, como siempre.
-      if (conCobro && !cobroFallo && !facturaEmitida) {
-        setReciboVentaId(ventaId)
+      // Comprobante post-cobro SIEMPRE: la factura si salió, el recibo si no.
+      // Con cobro fallido no hay comprobante de pago que valga — se va al
+      // detalle a resolver el cobro, como siempre.
+      if (conCobro && !cobroFallo) {
+        setComprobante({ ventaId, doc: facturaEmitida ? "factura" : "recibo" })
       } else {
         router.push(`${DOMINIO.ventas.ruta}/${ventaId}`)
       }
@@ -730,61 +735,13 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
         ¿Te pagan después? &apos;Registrar sin cobrar&apos; deja la venta pendiente y la cobrás desde la ficha.
       </p>
 
-      {/* Comprobante de pago post-cobro (2026-08-25): la venta ya está
-          registrada y cobrada — este diálogo solo muestra el recibo NO fiscal
-          para entregarle al cliente. Cerrarlo por cualquier vía equivale a
-          Continuar: jamás bloquea la operación ni puede deshacerla. */}
-      <Dialog.Root
-        open={reciboVentaId !== null}
-        onOpenChange={(open) => {
-          if (!open && reciboVentaId) {
-            router.push(`${DOMINIO.ventas.ruta}/${reciboVentaId}`)
-          }
-        }}
-      >
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in-0 duration-150" />
-          <Dialog.Content className="fixed z-[91] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] sm:max-w-2xl rounded-xl border border-app-line-soft bg-app-card shadow-2xl p-6 space-y-4 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 duration-150">
-            <div>
-              <Dialog.Title className="font-display text-lg font-semibold text-app-text">
-                Venta registrada y cobrada ✓
-              </Dialog.Title>
-              <Dialog.Description className="text-sm text-app-secondary mt-1">
-                El cobro entró a la caja. Este es el comprobante de pago para entregarle al
-                cliente — no es una factura; si la necesita, la emitís desde la ficha.
-              </Dialog.Description>
-            </div>
-
-            {reciboVentaId && (
-              <iframe
-                ref={reciboFrameRef}
-                src={`/recibo/${reciboVentaId}?embed=1`}
-                title="Comprobante de pago"
-                className="w-full h-[50vh] rounded-lg border border-app-line-soft bg-white"
-              />
-            )}
-
-            <div className="flex justify-end gap-2 pt-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => reciboVentaId && router.push(`${DOMINIO.ventas.ruta}/${reciboVentaId}`)}
-              >
-                Continuar
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => reciboFrameRef.current?.contentWindow?.print()}
-              >
-                <Printer className="w-4 h-4" />
-                Imprimir
-              </Button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      {/* El paso final del cobro: factura o recibo, pero papel SIEMPRE.
+          Continuar (o cerrar) lleva al detalle de la venta. */}
+      <ComprobanteDialog
+        ventaId={comprobante?.ventaId ?? null}
+        doc={comprobante?.doc ?? "recibo"}
+        onContinuar={() => comprobante && router.push(`${DOMINIO.ventas.ruta}/${comprobante.ventaId}`)}
+      />
     </form>
   )
 }

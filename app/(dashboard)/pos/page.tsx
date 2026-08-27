@@ -71,8 +71,8 @@ export default async function PosPage() {
         </header>
 
         <AyudaPantalla
-          que="La caja registradora del sistema: escaneás con el lector, el carrito se arma solo, elegís el método de pago y 'Cobrar y cerrar' registra la venta y el cobro juntos."
-          cuando="Cliente parado adelante tuyo, pagando ya y llevándose la mercadería. Para pedidos a cuenta, con entrega después o con bonificación manual, usá Nueva venta."
+          que="La caja registradora del sistema: escaneás con el lector, el carrito se arma solo, elegís el método de pago y 'Cobrar y cerrar' registra la venta y el cobro juntos. Al cerrar aparece el comprobante para imprimir — factura o recibo, siempre."
+          cuando="Cliente parado adelante tuyo, pagando ya y llevándose la mercadería. Para pedidos a cuenta o con entrega después, usá Nueva venta."
           ojo="El Mostrador SIEMPRE cobra en el acto — no existe la venta de mostrador pendiente. Si el cliente se lleva algo sin pagar, eso va por Nueva venta."
           seccion="mostrador"
         />
