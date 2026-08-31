@@ -16,7 +16,9 @@ import {
 type ActionResult = { ok: false; error: string } | { ok: true }
 
 // ─── Cobrar venta (invocable por admin o por el vendedor de la venta) ───────
-// La RPC valida el permiso y hace todo atómico.
+// Recibe una LISTA de pagos (0043): uno solo va por cobrar_venta; dos o más
+// (pago mixto) van por cobrar_venta_multi, que registra todos-o-ninguno. En
+// ambos casos la RPC valida permiso y saldo y hace todo atómico.
 export async function cobrarVenta(input: CobrarVentaInput): Promise<ActionResult> {
   const parsed = cobrarVentaSchema.safeParse(input)
   if (!parsed.success) {
@@ -27,27 +29,36 @@ export async function cobrarVenta(input: CobrarVentaInput): Promise<ActionResult
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: "No autenticado" }
 
-  const { error } = await supabase.rpc("cobrar_venta", {
-    p_venta_id:    parsed.data.venta_id,
-    p_monto:       parsed.data.monto,
-    p_metodo:      parsed.data.metodo,
-    p_descripcion: parsed.data.descripcion ?? null,
-    p_fecha:       null,
-  })
+  const { venta_id, pagos, descripcion } = parsed.data
+  const { error } = pagos.length === 1
+    ? await supabase.rpc("cobrar_venta", {
+        p_venta_id:    venta_id,
+        p_monto:       pagos[0].monto,
+        p_metodo:      pagos[0].metodo,
+        p_descripcion: descripcion ?? null,
+        p_fecha:       null,
+      })
+    : await supabase.rpc("cobrar_venta_multi", {
+        p_venta_id:    venta_id,
+        p_pagos:       pagos,
+        p_descripcion: descripcion ?? null,
+        p_fecha:       null,
+      })
   if (error) return { ok: false, error: error.message }
 
   const { data: v } = await supabase
     .from("ventas")
     .select("id_publico, estado_cobro")
-    .eq("id", parsed.data.venta_id)
+    .eq("id", venta_id)
     .maybeSingle()
 
+  const detallePagos = pagos.map((p) => `${p.monto} ${p.metodo}`).join(" + ")
   await logHistorial(supabase, {
     tipo: TIPO_EVENTO.COBRO,
-    descripcion: `Cobro venta ${v?.id_publico ?? parsed.data.venta_id} · ${parsed.data.monto} · ${parsed.data.metodo}${v ? ` → ${v.estado_cobro}` : ""}`,
+    descripcion: `Cobro venta ${v?.id_publico ?? venta_id} · ${detallePagos}${v ? ` → ${v.estado_cobro}` : ""}`,
     entidadTipo: "venta",
-    entidadId: v?.id_publico ?? parsed.data.venta_id,
-    payload: { monto: parsed.data.monto, metodo: parsed.data.metodo },
+    entidadId: v?.id_publico ?? venta_id,
+    payload: { pagos },
     userId: user.id,
   })
 
