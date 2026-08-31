@@ -18,13 +18,19 @@ import {
 } from "@/app/(dashboard)/pos/actions"
 import { ComprobanteDialog } from "@/components/ventas/ComprobanteDialog"
 import { DOMINIO } from "@/lib/dominio"
-import { METODO_PAGO, type MetodoPago } from "@/lib/constants"
+import { METODO_PAGO, type MetodoPago, type PagoVenta } from "@/lib/validators/caja"
+import {
+  PagosInput,
+  pagosParaCobrar,
+  validarPagos,
+  type PagoDraft,
+} from "@/components/caja/PagosInput"
 import {
   CONDICION_IVA_LABEL,
   TIPO_COMPROBANTE_LABEL,
   motivoFacturaPendiente,
 } from "@/lib/facturacion-ui"
-import { METODO_PAGO_LABEL } from "@/lib/caja-ui"
+import { METODO_PAGO_LABEL, resumenPagos } from "@/lib/caja-ui"
 import { formatPesos } from "@/lib/utils"
 import { CONSUMIDOR_FINAL_ID } from "@/lib/validators/cliente"
 import {
@@ -94,6 +100,10 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
   const [resultados, setResultados] = useState<ProductoPos[]>([])
   const [lineas, setLineas] = useState<Linea[]>([])
   const [metodo, setMetodo] = useState<MetodoPago>(METODO_PAGO.EFECTIVO)
+  // Pago mixto (0043): el select de un método sigue siendo el fast path; la
+  // división en varios métodos se abre a pedido y debe sumar el total exacto.
+  const [pagoMixto, setPagoMixto] = useState(false)
+  const [pagosMixtos, setPagosMixtos] = useState<PagoDraft[]>([])
   // Desmarcado por defecto: en el mostrador facturar es una decisión ACTIVA
   // del que cobra (a diferencia de /ventas/nuevo, donde el default es emitir).
   const [facturar, setFacturar] = useState(false)
@@ -231,6 +241,15 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
   // queda rehén del web service; la factura se emite después desde la ficha.
   function cerrarVenta() {
     if (!puedeCerrar || isPending) return
+    // El desglose mixto se valida ANTES de registrar: si no suma el total,
+    // no hay venta a medias — se corrige y recién ahí se cierra.
+    if (pagoMixto) {
+      const invalido = validarPagos(pagosMixtos, Math.round(total * 100) / 100, true)
+      if (invalido) {
+        toast.error(invalido)
+        return
+      }
+    }
     startTransition(async () => {
       const res = await registrarVenta({
         cliente_id: clienteId,
@@ -254,7 +273,12 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
       // También cubre un precio que cambió entre resolver y registrar.
       const totalReal = res.data!.total ?? Math.round(total * 100) / 100
 
-      const cobro = await cobrarVenta({ venta_id: ventaId, monto: totalReal, metodo })
+      // Un método → un pago por el total; mixto → el desglose, con el drift
+      // de centavos client/numeric absorbido en el último pago.
+      const pagos: PagoVenta[] = pagoMixto
+        ? pagosParaCobrar(pagosMixtos, totalReal)
+        : [{ metodo, monto: totalReal }]
+      const cobro = await cobrarVenta({ venta_id: ventaId, pagos })
       if (!cobro.ok) {
         toast.error(`Venta registrada, pero el cobro falló: ${cobro.error} — cobrala desde la ficha.`)
       }
@@ -269,13 +293,15 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
       }
 
       toast.success(
-        `Venta cerrada · ${formatPesos(totalReal)}${cobro.ok ? ` · ${METODO_PAGO_LABEL[metodo]}` : ""}${facturada && tipoFactura ? ` · ${TIPO_COMPROBANTE_LABEL[tipoFactura]}` : ""}`,
+        `Venta cerrada · ${formatPesos(totalReal)}${cobro.ok ? ` · ${pagos.length === 1 ? METODO_PAGO_LABEL[pagos[0].metodo] : resumenPagos(pagos)}` : ""}${facturada && tipoFactura ? ` · ${TIPO_COMPROBANTE_LABEL[tipoFactura]}` : ""}`,
       )
       setUltima({ ventaId, total: totalReal, facturada, cobrada: cobro.ok })
       setLineas([])
       setAviso(null)
       setClienteId(CONSUMIDOR_FINAL_ID)
       setMetodo(METODO_PAGO.EFECTIVO)
+      setPagoMixto(false)
+      setPagosMixtos([])
       setFacturar(false)
       // Comprobante post-cobro SIEMPRE: la factura si salió, el recibo si no.
       // Con cobro fallido no hay comprobante de pago que valga — el banner de
@@ -495,12 +521,44 @@ export function PosTerminal({ clientes, afipConfigurada = false }: Props) {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="pos-metodo">Cobro</Label>
-          <Select id="pos-metodo" value={metodo} onChange={(e) => setMetodo(e.target.value as MetodoPago)}>
-            {Object.entries(METODO_PAGO_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </Select>
+          <Label htmlFor={pagoMixto ? "pos-mixto-metodo-0" : "pos-metodo"}>Cobro</Label>
+          {!pagoMixto ? (
+            <>
+              <Select id="pos-metodo" value={metodo} onChange={(e) => setMetodo(e.target.value as MetodoPago)}>
+                {Object.entries(METODO_PAGO_LABEL).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </Select>
+              <button
+                type="button"
+                onClick={() => {
+                  setPagosMixtos([{ metodo, monto: null }])
+                  setPagoMixto(true)
+                }}
+                className="text-[11px] font-mono text-app-muted hover:text-app-accent transition-colors"
+              >
+                ¿Paga con más de un método? Dividir el pago
+              </button>
+            </>
+          ) : (
+            <>
+              <PagosInput
+                pagos={pagosMixtos}
+                onChange={setPagosMixtos}
+                objetivo={Math.round(total * 100) / 100}
+                exacto
+                idPrefix="pos-mixto"
+                disabled={isPending}
+              />
+              <button
+                type="button"
+                onClick={() => setPagoMixto(false)}
+                className="text-[11px] font-mono text-app-muted hover:text-app-accent transition-colors"
+              >
+                Volver a un solo método
+              </button>
+            </>
+          )}
           {afipConfigurada && (
             <label className={`flex items-center gap-2 text-xs pt-1 ${puedeFacturar ? "text-app-text cursor-pointer" : "text-app-muted cursor-not-allowed"}`}>
               <input

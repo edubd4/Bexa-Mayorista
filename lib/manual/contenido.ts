@@ -514,7 +514,7 @@ export const SECCIONES: SeccionManual[] = [
           {
             titulo: "7 · ¿Te pagan en el acto? Botón 'Cobrar ahora'",
             detalle:
-              "Es el botón grande al pie del formulario — el camino normal: acá casi siempre se cobra en el momento. Abre la ventana de pago: ves el total, elegís el método a un toque (efectivo, transferencia, débito, crédito, Mercado Pago) y confirmás. Se registra la venta Y el cobro juntos — la plata entra a la caja al instante. Al terminar aparece SIEMPRE el comprobante en pantalla con su botón Imprimir: la factura si la emitiste, el recibo no fiscal si no — entregáselo al cliente. Si el cliente paga después, usá 'Registrar sin cobrar', al lado: la venta queda pendiente y la cobrás desde la ficha cuando te paguen.",
+              "Es el botón grande al pie del formulario — el camino normal: acá casi siempre se cobra en el momento. Abre la ventana de pago: ves el total, elegís el método a un toque (efectivo, transferencia, débito, crédito, Mercado Pago) y confirmás. ¿Paga con más de un método — por ejemplo una parte en efectivo y otra por transferencia? Tocá 'Dividir el pago', poné cuánto va en cada método y el sistema controla que la suma dé el total exacto; también está en el Mostrador. Se registra la venta Y el cobro juntos — la plata entra a la caja al instante. Al terminar aparece SIEMPRE el comprobante en pantalla con su botón Imprimir: la factura si la emitiste, el recibo no fiscal si no — entregáselo al cliente. Si el cliente paga después, usá 'Registrar sin cobrar', al lado: la venta queda pendiente y la cobrás desde la ficha cuando te paguen.",
           },
           {
             titulo: "8 · Notas y confirmar",
@@ -601,7 +601,7 @@ export const SECCIONES: SeccionManual[] = [
           {
             titulo: "3 · Monto y método de pago",
             detalle:
-              "Podés cobrar todo o una parte. Elegí bien el método (efectivo, transferencia, débito, crédito, Mercado Pago): de eso depende que la caja física cuadre después.",
+              "Podés cobrar todo o una parte. Elegí bien el método (efectivo, transferencia, débito, crédito, Mercado Pago): de eso depende que la caja física cuadre después. ¿El cliente paga mitad y mitad? Tocá 'Agregar método (pago mixto)' y poné cuánto entra por cada uno — cada parte queda en la caja con su método.",
           },
           {
             titulo: "4 · Confirmá",

@@ -36,15 +36,27 @@ export const METODO_PAGO = {
 } as const
 export type MetodoPago = typeof METODO_PAGO[keyof typeof METODO_PAGO]
 
+const metodoPagoEnum = z.enum([
+  METODO_PAGO.EFECTIVO,       METODO_PAGO.TRANSFERENCIA,
+  METODO_PAGO.TARJETA_DEBITO, METODO_PAGO.TARJETA_CREDITO,
+  METODO_PAGO.MERCADO_PAGO,   METODO_PAGO.CHEQUE, METODO_PAGO.OTRO,
+])
+
 // ─── Cobrar venta ──────────────────────────────────────────────────────────
+// Un cobro es una LISTA de pagos (0043): el caso normal trae uno solo, el
+// pago mixto trae "$5.000 efectivo + $5.000 transferencia". El tope 7 espeja
+// el del RPC cobrar_venta_multi.
+export const pagoVentaSchema = z.object({
+  metodo: metodoPagoEnum.default(METODO_PAGO.EFECTIVO),
+  monto:  z.preprocess(numeroPreprocess, z.number().positive("Monto debe ser > 0")),
+})
+export type PagoVenta = z.infer<typeof pagoVentaSchema>
+
 export const cobrarVentaSchema = z.object({
   venta_id:    zUuid(),
-  monto:       z.preprocess(numeroPreprocess, z.number().positive("Monto debe ser > 0")),
-  metodo:      z.enum([
-    METODO_PAGO.EFECTIVO,       METODO_PAGO.TRANSFERENCIA,
-    METODO_PAGO.TARJETA_DEBITO, METODO_PAGO.TARJETA_CREDITO,
-    METODO_PAGO.MERCADO_PAGO,   METODO_PAGO.CHEQUE, METODO_PAGO.OTRO,
-  ]).default(METODO_PAGO.EFECTIVO),
+  pagos:       z.array(pagoVentaSchema)
+                 .min(1, "Agregá al menos un pago")
+                 .max(7, "Demasiados métodos en un solo cobro (máximo 7)"),
   descripcion: z.preprocess(emptyToUndef, z.string().trim().max(500).optional()),
 })
 export type CobrarVentaInput = z.infer<typeof cobrarVentaSchema>
@@ -54,11 +66,7 @@ export const movimientoManualSchema = z.object({
   tipo:        z.enum([TIPO_MOV_CAJA.INGRESO, TIPO_MOV_CAJA.EGRESO]),
   origen:      z.enum([ORIGEN_MOV_CAJA.APERTURA, ORIGEN_MOV_CAJA.AJUSTE, ORIGEN_MOV_CAJA.OTRO]),
   monto:       z.preprocess(numeroPreprocess, z.number().positive("Monto debe ser > 0")),
-  metodo:      z.enum([
-    METODO_PAGO.EFECTIVO,       METODO_PAGO.TRANSFERENCIA,
-    METODO_PAGO.TARJETA_DEBITO, METODO_PAGO.TARJETA_CREDITO,
-    METODO_PAGO.MERCADO_PAGO,   METODO_PAGO.CHEQUE, METODO_PAGO.OTRO,
-  ]).default(METODO_PAGO.EFECTIVO),
+  metodo:      metodoPagoEnum.default(METODO_PAGO.EFECTIVO),
   descripcion: z.string().trim().min(1, "Descripción requerida").max(500),
 })
 export type MovimientoManualInput = z.infer<typeof movimientoManualSchema>
@@ -76,11 +84,7 @@ export const gastoSchema = z.object({
   monto:        z.preprocess(numeroPreprocess, z.number().positive("Monto debe ser > 0")),
   descripcion:  z.string().trim().min(1, "Descripción requerida").max(500),
   fecha:        z.preprocess(emptyToUndef, z.string().optional()),   // YYYY-MM-DD del <input type=date>
-  metodo:       z.enum([
-    METODO_PAGO.EFECTIVO,       METODO_PAGO.TRANSFERENCIA,
-    METODO_PAGO.TARJETA_DEBITO, METODO_PAGO.TARJETA_CREDITO,
-    METODO_PAGO.MERCADO_PAGO,   METODO_PAGO.CHEQUE, METODO_PAGO.OTRO,
-  ]).default(METODO_PAGO.EFECTIVO),
+  metodo:       metodoPagoEnum.default(METODO_PAGO.EFECTIVO),
   notas:        z.preprocess(emptyToUndef, z.string().trim().max(1000).optional()),
   // Campaña a la que se imputa (0028). Opcional para el admin: la mayoría de
   // los gastos no son de publicidad. OBLIGATORIO para marketing — el RPC lo
@@ -105,11 +109,7 @@ export const gastoFijoSchema = z.object({
   nombre:         z.string().trim().min(1, "El nombre es obligatorio").max(120),
   categoria_id:   z.preprocess(numeroPreprocess, z.number().int().positive("Elegí una categoría")),
   monto_estimado: z.preprocess(numeroPreprocess, z.number().positive("Monto estimado debe ser > 0")),
-  metodo_pago:    z.enum([
-    METODO_PAGO.EFECTIVO,       METODO_PAGO.TRANSFERENCIA,
-    METODO_PAGO.TARJETA_DEBITO, METODO_PAGO.TARJETA_CREDITO,
-    METODO_PAGO.MERCADO_PAGO,   METODO_PAGO.CHEQUE, METODO_PAGO.OTRO,
-  ]).default(METODO_PAGO.EFECTIVO),
+  metodo_pago:    metodoPagoEnum.default(METODO_PAGO.EFECTIVO),
   periodicidad:   z.enum([
     PERIODICIDAD_GASTO_FIJO.SEMANAL,
     PERIODICIDAD_GASTO_FIJO.MENSUAL,

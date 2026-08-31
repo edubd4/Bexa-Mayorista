@@ -3,13 +3,11 @@
 import { useState, useTransition } from "react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { MoneyInput } from "@/components/ui/number-input"
-import { Select } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast"
 import { cobrarVenta } from "@/app/(dashboard)/caja/actions"
-import { METODO_PAGO, type MetodoPago } from "@/lib/validators/caja"
-import { METODO_PAGO_LABEL } from "@/lib/caja-ui"
+import { PagosInput, validarPagos, type PagoDraft } from "@/components/caja/PagosInput"
+import { METODO_PAGO } from "@/lib/validators/caja"
 import { formatPesos } from "@/lib/utils"
 
 type Props = {
@@ -21,8 +19,7 @@ type Props = {
 export function CobrarVentaForm({ ventaId, idPublico, saldo }: Props) {
   const toast = useToast()
   const [showForm, setShowForm] = useState(false)
-  const [monto, setMonto] = useState<number | null>(saldo)
-  const [metodo, setMetodo] = useState<MetodoPago>(METODO_PAGO.EFECTIVO)
+  const [pagos, setPagos] = useState<PagoDraft[]>([{ metodo: METODO_PAGO.EFECTIVO, monto: saldo }])
   const [descripcion, setDescripcion] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -38,14 +35,13 @@ export function CobrarVentaForm({ ventaId, idPublico, saldo }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    if (monto === null || monto <= 0) return setError("Monto debe ser > 0")
-    if (monto > saldo) return setError(`Monto excede el saldo pendiente (${formatPesos(saldo)})`)
+    const invalido = validarPagos(pagos, saldo, false)
+    if (invalido) return setError(invalido)
 
     startTransition(async () => {
       const res = await cobrarVenta({
         venta_id: ventaId,
-        monto,
-        metodo,
+        pagos: pagos.map((p) => ({ metodo: p.metodo, monto: p.monto! })),
         descripcion: descripcion.trim() || undefined,
       })
       if (!res.ok) {
@@ -55,7 +51,7 @@ export function CobrarVentaForm({ ventaId, idPublico, saldo }: Props) {
       }
       toast.success(`Cobro registrado en venta ${idPublico}`)
       setShowForm(false)
-      setMonto(null)
+      setPagos([{ metodo: METODO_PAGO.EFECTIVO, monto: null }])
       setDescripcion("")
     })
   }
@@ -76,29 +72,15 @@ export function CobrarVentaForm({ ventaId, idPublico, saldo }: Props) {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <Label htmlFor="cobro-monto">Monto</Label>
-          <MoneyInput
-            id="cobro-monto"
-            decimals={2}
-            value={monto}
-            onChange={setMonto}
-            max={saldo}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="cobro-metodo">Método</Label>
-          <Select
-            id="cobro-metodo"
-            value={metodo}
-            onChange={(e) => setMetodo(e.target.value as MetodoPago)}
-          >
-            {(Object.keys(METODO_PAGO) as MetodoPago[]).map((m) => (
-              <option key={m} value={m}>{METODO_PAGO_LABEL[m]}</option>
-            ))}
-          </Select>
-        </div>
+      <div className="space-y-1">
+        <Label htmlFor="cobro-metodo-0">Pago</Label>
+        <PagosInput
+          pagos={pagos}
+          onChange={setPagos}
+          objetivo={saldo}
+          idPrefix="cobro"
+          disabled={isPending}
+        />
       </div>
 
       <div className="space-y-1">
@@ -114,7 +96,7 @@ export function CobrarVentaForm({ ventaId, idPublico, saldo }: Props) {
       <div className="flex justify-between text-xs font-mono">
         <button
           type="button"
-          onClick={() => setMonto(saldo)}
+          onClick={() => setPagos([{ metodo: pagos[0]?.metodo ?? METODO_PAGO.EFECTIVO, monto: saldo }])}
           className="text-app-muted hover:text-app-accent"
         >
           Cobrar total ({formatPesos(saldo)})

@@ -30,7 +30,13 @@ import {
   TIPO_COMPROBANTE_LABEL,
   motivoFacturaPendiente,
 } from "@/lib/facturacion-ui"
-import { METODO_PAGO_LABEL } from "@/lib/caja-ui"
+import { METODO_PAGO_LABEL, resumenPagos } from "@/lib/caja-ui"
+import {
+  PagosInput,
+  pagosParaCobrar,
+  validarPagos,
+  type PagoDraft,
+} from "@/components/caja/PagosInput"
 import { formatPesos } from "@/lib/utils"
 import { explicarOrigenPrecio } from "@/lib/ventas-ui"
 import {
@@ -38,7 +44,7 @@ import {
   tipoComprobantePara,
   type CondicionIva,
 } from "@/lib/validators/facturacion"
-import { METODO_PAGO, type MetodoPago } from "@/lib/validators/caja"
+import { METODO_PAGO, type MetodoPago, type PagoVenta } from "@/lib/validators/caja"
 import {
   ESTADO_ENTREGA,
   type PrecioResuelto,
@@ -132,6 +138,11 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
   // el submit normal registra a cuenta, que es la excepción.
   const [cobroOpen, setCobroOpen] = useState(false)
   const [metodoPago, setMetodoPago] = useState<MetodoPago>(METODO_PAGO.EFECTIVO)
+  // Pago mixto (0043): el fast path sigue siendo un método a un toque; la
+  // división en varios métodos se abre a pedido y exige sumar el total exacto.
+  const [pagoMixto, setPagoMixto] = useState(false)
+  const [pagosMixtos, setPagosMixtos] = useState<PagoDraft[]>([])
+  const [errorCobro, setErrorCobro] = useState<string | null>(null)
   // Comprobante post-cobro SIEMPRE (2026-08-27): factura si ARCA la autorizó,
   // recibo no fiscal si no — el cliente no se va sin papel. Es un paso del
   // cobro, no un opcional.
@@ -326,13 +337,14 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
       // (review 2026-08-19 #3). El redondeo queda de fallback por si la
       // lectura del total no vuelve.
       const totalCobrable = res.data!.total ?? Math.round(totales.total * 100) / 100
+      // Un método → un pago por el total; pago mixto → el desglose del
+      // diálogo, con el drift de centavos absorbido en el último pago.
+      const pagos: PagoVenta[] = pagoMixto
+        ? pagosParaCobrar(pagosMixtos, totalCobrable)
+        : [{ metodo: metodoPago, monto: totalCobrable }]
       let cobroFallo: string | null = null
       if (conCobro) {
-        const cobro = await cobrarVenta({
-          venta_id: ventaId,
-          monto:    totalCobrable,
-          metodo:   metodoPago,
-        })
+        const cobro = await cobrarVenta({ venta_id: ventaId, pagos })
         if (!cobro.ok) cobroFallo = cobro.error
       }
 
@@ -352,12 +364,12 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
         const fact = await emitirFactura({ venta_id: ventaId })
         facturaEmitida = fact.ok
         if (fact.ok) {
-          toast.success(`Venta registrada${sufijoCobro(conCobro, cobroFallo, metodoPago)} · ${TIPO_COMPROBANTE_LABEL[tipoFactura]} emitida con CAE`)
+          toast.success(`Venta registrada${sufijoCobro(conCobro, cobroFallo, pagos)} · ${TIPO_COMPROBANTE_LABEL[tipoFactura]} emitida con CAE`)
         } else {
           toast.error(`Venta registrada, pero sin factura: ${motivoFacturaPendiente(fact.error)}. Se puede emitir después desde la ficha.`)
         }
       } else {
-        toast.success(`Venta registrada${sufijoCobro(conCobro, cobroFallo, metodoPago)}`)
+        toast.success(`Venta registrada${sufijoCobro(conCobro, cobroFallo, pagos)}`)
       }
       // El cobro fallido se avisa aparte y con el motivo: es plata, no puede
       // quedar tapado por el mensaje de la factura.
@@ -383,8 +395,21 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
 
   function confirmarCobro() {
     if (!puedeGuardar || isPending) return
+    if (pagoMixto) {
+      const invalido = validarPagos(pagosMixtos, Math.round(totales.total * 100) / 100, true)
+      if (invalido) return setErrorCobro(invalido)
+    }
+    setErrorCobro(null)
     setCobroOpen(false)
     registrar(true)
+  }
+
+  function activarPagoMixto() {
+    // Arranca con el método ya elegido y monto vacío: el vendedor tipea lo
+    // que entra por ese método y "Agregar método" precarga el restante.
+    setPagosMixtos([{ metodo: metodoPago, monto: null }])
+    setErrorCobro(null)
+    setPagoMixto(true)
   }
 
   return (
@@ -697,33 +722,73 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
                 <p className="font-display text-3xl text-app-accent mt-1">{formatPesos(totales.total)}</p>
               </div>
 
-              {/* Método de pago a un toque, como en el mostrador. */}
-              <div className="space-y-1.5">
-                <span className="text-sm text-app-secondary">Método de pago</span>
-                <div className="grid grid-cols-2 gap-2">
-                  {(Object.keys(METODO_PAGO) as MetodoPago[]).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setMetodoPago(m)}
-                      className={`rounded-lg border px-3 py-2.5 text-sm transition-colors ${
-                        metodoPago === m
-                          ? "border-app-accent bg-app-accent/15 text-app-accent font-semibold"
-                          : "border-app-line-soft bg-app-card text-app-secondary hover:border-app-line hover:text-app-text"
-                      }`}
-                    >
-                      {METODO_PAGO_LABEL[m]}
-                    </button>
-                  ))}
+              {/* Método de pago a un toque, como en el mostrador. El pago
+                  mixto (0043) se abre a pedido: varios métodos, cada uno con
+                  su monto, y la suma tiene que dar el total exacto. */}
+              {!pagoMixto ? (
+                <div className="space-y-1.5">
+                  <span className="text-sm text-app-secondary">Método de pago</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(Object.keys(METODO_PAGO) as MetodoPago[]).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setMetodoPago(m)}
+                        className={`rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+                          metodoPago === m
+                            ? "border-app-accent bg-app-accent/15 text-app-accent font-semibold"
+                            : "border-app-line-soft bg-app-card text-app-secondary hover:border-app-line hover:text-app-text"
+                        }`}
+                      >
+                        {METODO_PAGO_LABEL[m]}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={activarPagoMixto}
+                    className="text-xs font-mono text-app-muted hover:text-app-accent transition-colors"
+                  >
+                    ¿Pagó con más de un método? Dividir el pago
+                  </button>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-app-secondary">Pago mixto</span>
+                    <button
+                      type="button"
+                      onClick={() => { setPagoMixto(false); setErrorCobro(null) }}
+                      className="text-xs font-mono text-app-muted hover:text-app-accent transition-colors"
+                    >
+                      Volver a un solo método
+                    </button>
+                  </div>
+                  <PagosInput
+                    pagos={pagosMixtos}
+                    onChange={setPagosMixtos}
+                    objetivo={Math.round(totales.total * 100) / 100}
+                    exacto
+                    idPrefix="cobro-mixto"
+                    disabled={isPending}
+                  />
+                </div>
+              )}
+
+              {errorCobro && (
+                <div role="alert" className="rounded-md border border-app-red/40 bg-app-red/10 px-3 py-2 text-xs text-app-red">
+                  {errorCobro}
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-1">
                 <Button type="button" variant="ghost" size="sm" onClick={() => setCobroOpen(false)}>
                   Volver
                 </Button>
                 <Button type="button" size="sm" disabled={isPending} onClick={confirmarCobro}>
-                  {isPending ? "Registrando…" : `Cobrar y registrar · ${METODO_PAGO_LABEL[metodoPago]}`}
+                  {isPending
+                    ? "Registrando…"
+                    : `Cobrar y registrar · ${pagoMixto ? "pago mixto" : METODO_PAGO_LABEL[metodoPago]}`}
                 </Button>
               </div>
             </Dialog.Content>
@@ -746,10 +811,13 @@ export function VentaForm({ clientes, productos, campanasActivas = [], afipConfi
   )
 }
 
-// Sufijo del toast segun como salio el cobro encadenado.
-function sufijoCobro(cobrarAhora: boolean, fallo: string | null, metodo: MetodoPago): string {
+// Sufijo del toast segun como salio el cobro encadenado. Con pago mixto va
+// el desglose completo: es el comprobante hablado de lo que entró por dónde.
+function sufijoCobro(cobrarAhora: boolean, fallo: string | null, pagos: PagoVenta[]): string {
   if (!cobrarAhora || fallo) return ""
-  return ` y cobrada · ${METODO_PAGO_LABEL[metodo]}`
+  return pagos.length === 1
+    ? ` y cobrada · ${METODO_PAGO_LABEL[pagos[0].metodo]}`
+    : ` y cobrada · ${resumenPagos(pagos)}`
 }
 
 function Total({
